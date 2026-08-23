@@ -5,7 +5,7 @@
  *  - 演示租户/工作区（industry: geo-growth）
  *  - 人类成员（客户老板/渠道运营——全托管线最小配置）
  *  - bundles/geo-growth 的 16 个数码员工 preset（情报组 2 + 内容组 4 + 分发组 3 + 数据组 3 + 经营组 2 + 指挥层 2；fence_bindings 原样落库）
- *  - geo-growth-baseline/v1 双域基线围栏（社媒域 G9/G10/G12/G15/G16 + GEO 域 G-GEO1/2/3 + 双域 G17/G18/G20 共 16 条）
+ *  - geo-growth-baseline/v1 双域基线围栏（社媒域 G9/G10/G12/G15/G16 + GEO 域 G-GEO1/2/3 + 双域 G17/G18/G20 共 17 条）
  *  - 6 个 GEO 官方技能（安装即绑定围栏）
  *  - 一客一档 v2（七模块：企业品牌/产品实体卡/目标市场/内容资产/运营资产/GEO 资产/转化资产 + 数据边界声明）
  *  - 自动化触发器（情报站 07:00 / 清晨决策包 08:30 / 能见度品牌词日频+全量周频 / 周一经营会 / 月度回测 / 夜班值守 / CEO 节拍）
@@ -288,7 +288,7 @@ async function main() {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'ready',$10)
        ON CONFLICT (id) DO NOTHING`,
       [
-        `agt-${p.preset_key}`,
+        `agt-geo-${p.preset_key}`,
         WS_ID,
         p.preset_key,
         p.name,
@@ -363,21 +363,21 @@ async function main() {
 
   // 自动化触发器（4 条主干管线节拍 + CEO Loop）
   const triggers = [
-    { id: "tg-intel-0700", name: "情报站每日 07:00 刷新", kind: "cron", schedule: "0 7 * * *", action: { dispatch: "geo-researcher", template: "intel.collect" } },
-    { id: "tg-morning-0830", name: "清晨决策包 08:30", kind: "cron", schedule: "30 8 * * *", action: { dispatch: "company-ceo", template: "decision.pack" } },
-    { id: "tg-metrics-2h", name: "社媒指标每 2 小时采集", kind: "cron", schedule: "7 */2 * * *", action: { dispatch: "data-board-officer", template: "metrics.collect" } },
-    { id: "tg-comments-30m", name: "评论私信每 30 分钟分流", kind: "cron", schedule: "*/30 * * * *", action: { dispatch: "private-domain-operator", template: "comments.ingest" } },
-    { id: "tg-visibility-brand", name: "能见度品牌词日频采集", kind: "cron", schedule: "0 21 * * *", action: { dispatch: "visibility-watcher", template: "visibility.collect.brand" } },
-    { id: "tg-visibility-full", name: "能见度全量 query 集周频采集", kind: "cron", schedule: "0 9 * * 1", action: { dispatch: "visibility-watcher", template: "visibility.collect.full" } },
-    { id: "tg-battle-report", name: "周一全网存在感战报", kind: "cron", schedule: "0 9 * * 1", action: { dispatch: "review-analyst", template: "report.weekly" } },
-    { id: "tg-backtest-monthly", name: "月度决策回测", kind: "cron", schedule: "0 10 1 * *", action: { dispatch: "review-analyst", template: "backtest.run" } },
-    { id: "tg-entity-patrol", name: "实体一致性夜班巡检", kind: "cron", schedule: "0 2 * * *", action: { dispatch: "entity-inspector", template: "entity.scan" } },
-    { id: "tg-fleet-weekly", name: "集团CEO 交付人效看板", kind: "cron", schedule: "0 18 * * 5", action: { dispatch: "group-ceo", template: "fleet.scoreboard" } },
+    { id: "tg-geo-intel-0700", name: "情报站每日 07:00 刷新", kind: "cron", schedule: "0 7 * * *", action: { dispatch: "geo-researcher", template: "intel.collect" } },
+    { id: "tg-geo-morning-0830", name: "清晨决策包 08:30", kind: "cron", schedule: "30 8 * * *", action: { dispatch: "company-ceo", template: "decision.pack" } },
+    { id: "tg-geo-metrics-2h", name: "社媒指标每 2 小时采集", kind: "cron", schedule: "7 */2 * * *", action: { dispatch: "data-board-officer", template: "metrics.collect" } },
+    { id: "tg-geo-comments-30m", name: "评论私信每 30 分钟分流", kind: "cron", schedule: "*/30 * * * *", action: { dispatch: "private-domain-operator", template: "comments.ingest" } },
+    { id: "tg-geo-visibility-brand", name: "能见度品牌词日频采集", kind: "cron", schedule: "0 21 * * *", action: { dispatch: "visibility-watcher", template: "visibility.collect.brand" } },
+    { id: "tg-geo-visibility-full", name: "能见度全量 query 集周频采集", kind: "cron", schedule: "0 9 * * 1", action: { dispatch: "visibility-watcher", template: "visibility.collect.full" } },
+    { id: "tg-geo-battle-report", name: "周一全网存在感战报", kind: "cron", schedule: "0 9 * * 1", action: { dispatch: "review-analyst", template: "report.weekly" } },
+    { id: "tg-geo-backtest-monthly", name: "月度决策回测", kind: "cron", schedule: "0 10 1 * *", action: { dispatch: "review-analyst", template: "backtest.run" } },
+    { id: "tg-geo-entity-patrol", name: "实体一致性夜班巡检", kind: "cron", schedule: "0 2 * * *", action: { dispatch: "entity-inspector", template: "entity.scan" } },
+    { id: "tg-geo-fleet-weekly", name: "集团CEO 交付人效看板", kind: "cron", schedule: "0 18 * * 5", action: { dispatch: "group-ceo", template: "fleet.scoreboard" } },
     // 数字CEO 节拍（D21：CEO Loop；调度器消费前经治理守卫校验 charter.mode）
-    { id: "tg-ceo-brief-0830", name: "公司CEO 晨报 08:30", kind: "cron", schedule: "30 8 * * *", action: { beat: "daily" } },
-    { id: "tg-ceo-queue-2h", name: "公司CEO 裁决巡检 2h", kind: "cron", schedule: "7 */2 * * *", action: { beat: "queue" } },
-    { id: "tg-ceo-deviation", name: "公司CEO 目标偏差扫描", kind: "cron", schedule: "15 */4 * * *", action: { beat: "deviation" } },
-    { id: "tg-ceo-breaker", name: "公司CEO 自治熔断巡检", kind: "cron", schedule: "45 23 * * *", action: { beat: "breaker" } },
+    { id: "tg-geo-ceo-brief-0830", name: "公司CEO 晨报 08:30", kind: "cron", schedule: "30 8 * * *", action: { beat: "daily" } },
+    { id: "tg-geo-ceo-queue-2h", name: "公司CEO 裁决巡检 2h", kind: "cron", schedule: "7 */2 * * *", action: { beat: "queue" } },
+    { id: "tg-geo-ceo-deviation", name: "公司CEO 目标偏差扫描", kind: "cron", schedule: "15 */4 * * *", action: { beat: "deviation" } },
+    { id: "tg-geo-ceo-breaker", name: "公司CEO 自治熔断巡检", kind: "cron", schedule: "45 23 * * *", action: { beat: "breaker" } },
   ];
   for (const t of triggers) {
     await q(
@@ -392,9 +392,9 @@ async function main() {
 
   // —— 演示线程 ——
   const threads = [
-    { id: "T-G01", title: "激光切割机选型·双用选题内容生产", mode: "quest", status: "running", done: 6, total: 9, agent: "agt-geo-content-planner", by: "MEM-G02" },
-    { id: "T-G02", title: "query 集 v1 能见度基线采集", mode: "quest", status: "running", done: 18, total: 24, agent: "agt-visibility-watcher", by: "MEM-G02" },
-    { id: "T-G03", title: "周一全网存在感战报", mode: "ask", status: "completed", done: 5, total: 5, agent: "agt-review-analyst", by: "MEM-G01" },
+    { id: "T-G01", title: "激光切割机选型·双用选题内容生产", mode: "quest", status: "running", done: 6, total: 9, agent: "agt-geo-geo-content-planner", by: "MEM-G02" },
+    { id: "T-G02", title: "query 集 v1 能见度基线采集", mode: "quest", status: "running", done: 18, total: 24, agent: "agt-geo-visibility-watcher", by: "MEM-G02" },
+    { id: "T-G03", title: "周一全网存在感战报", mode: "ask", status: "completed", done: 5, total: 5, agent: "agt-geo-review-analyst", by: "MEM-G01" },
   ];
   for (const t of threads) {
     await q(
@@ -458,7 +458,7 @@ async function main() {
     if (c.auto) {
       await q(
         `INSERT INTO comment_replies (id, workspace_id, comment_id, text, channel, status, receipt, created_by, created_at)
-         VALUES ($1,$2,$3,'Thanks! DM us for the full spec sheet.','auto','sent','{"delivered":true}','agt-private-domain-operator',$4) ON CONFLICT (id) DO NOTHING`,
+         VALUES ($1,$2,$3,'Thanks! DM us for the full spec sheet.','auto','sent','{"delivered":true}','agt-geo-private-domain-operator',$4) ON CONFLICT (id) DO NOTHING`,
         [`cr-${c.id}`, WS_ID, c.id, new Date(Date.now() - i * 53 * 60000 + 300000).toISOString()],
       );
     }
@@ -491,7 +491,9 @@ async function main() {
   }
   times.sort((a, b) => a.getTime() - b.getTime());
 
-  const EVENT_BASE_G = 8800;
+  // 事件编号段分配纪律（同租户 UNIQUE(tenant_id,event_id)，各种子不得重叠）：
+  // seed.ts（hotel）8801-8900 / seed-video.ts 6601-6700 / seed-geo.ts 9901-9960
+  const EVENT_BASE_G = 9900;
   const mkEvent = (i: number, time: Date) => {
     const id = `E-${EVENT_BASE_G + i}`;
     const scene = i % 10;
@@ -501,7 +503,7 @@ async function main() {
     switch (scene) {
       case 0: return { event_id: id, who: agentWho("visibility-watcher"), context: ctx, object: { type: "visibility_snapshot", id: `vs-${(i % 24) + 1}`, label: "品牌词能见度快照" }, decision: { action: "visibility.collect", after: { platform: "deepseek", query: "锐科激光切割机怎么样", mentioned: true, first: false }, basis: ["品牌词日频采集", "原始答案截图已存证"] }, rule_impact: [], receipt, model_trace: mt };
       case 1: return { event_id: id, who: agentWho("geo-content-planner"), context: ctx, object: { type: "geo_content", id: "geo-c-001", label: "激光切割机怎么选·AI 答案版" }, decision: { action: "geo.rewrite", after: { format: "六段式", entity_anchors: "与实体卡逐字一致（已比对）" }, basis: ["脚本人审通过自动触发", "品类词→清单式结构"] }, rule_impact: [{ rule_id: "G-GEO2", version: FENCE_VERSION, result: "pass" }], receipt, model_trace: mt };
-      case 2: return { event_id: id, who: agentWho("private-domain-operator"), context: ctx, object: { type: "inquiry", id: `inq-${(i % 3) + 1}`, label: "WhatsApp 询盘" }, decision: { action: "inquiry.tag", after: { entry: i % 2 === 0 ? "ai_search" : "social", quality: "有效" }, basis: ["双入口来源打标", "落地页渠道参数识别"] }, rule_impact: [], receipt, model_trace: mt };
+      case 2: return { event_id: id, who: agentWho("private-domain-operator"), context: ctx, object: { type: "inquiry", id: `inq-${(i % 3) + 1}`, label: "WhatsApp 询盘" }, decision: { action: "inquiry.tag", after: { entry: i % 3 === 0 ? "social" : "ai_search", quality: "有效" }, basis: ["双入口来源打标", "落地页渠道参数识别"] }, rule_impact: [], receipt, model_trace: mt };
       case 3: return { event_id: id, who: agentWho("source-distributor"), context: ctx, object: { type: "source_task", id: "st-zhihu-001", label: "知乎·选型清单文分发" }, decision: { action: "geo.publish", after: { platform: "zhihu", url: "https://example.invalid/zh/001" }, basis: ["G-GEO1 审批通过", "模拟人工节奏"] }, rule_impact: [{ rule_id: "G-GEO1", version: FENCE_VERSION, result: "pass" }], receipt, model_trace: mt };
       case 4: return { event_id: id, who: agentWho("company-ceo"), context: ctx, object: { type: "workspace", id: WS_ID, label: WS_NAME }, decision: { action: "ceo.briefing", after: { text: "董事长，早报已备：昨日能见度品牌词提及 4/6（▲2），社媒播放 1.9w（▲22%）；双入口询盘 3 条（社媒 2 / AI 搜索 1）；1 件谨慎上浮请您定——百科词条功率口径修复外发。试用期第 4 天，边界降一档执行中。" }, basis: ["CEO Loop 日频晨报 08:30"] }, rule_impact: [], receipt, model_trace: mt };
       case 5: return { event_id: id, who: agentWho("entity-inspector"), context: ctx, object: { type: "conflict_item", id: "cf-001", label: "百科功率口径冲突" }, decision: { action: "entity.scan", after: { wrong: "功率标称 1200W", correct: "RK-1500W 额定 1500W", plan: "平台申诉+更正稿双路径" }, basis: ["夜班实体巡检", "与实体卡 confirmed 字段逐字比对"] }, rule_impact: [], receipt, model_trace: mt };
@@ -541,7 +543,7 @@ async function main() {
     await q(
       `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, tier, snapshot)
        VALUES ($1,$2,$3,$4,'inapp','pending',$5,$6)
-       ON CONFLICT (event_id, channel) DO NOTHING`,
+       ON CONFLICT (approval_id) DO NOTHING`,
       [a.aid, TENANT_ID, WS_ID, a.eid, a.tier, JSON.stringify(a.snapshot)],
     );
   }

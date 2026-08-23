@@ -2,19 +2,45 @@
 
 本文件记录 WorkLoom IM 底座的变更历史。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 
+## [2.0.1] - 2026-08-23 · 深度压测（D27）：全系统摸排 727 用例全绿 + 9 项缺陷修复
+
+### 压测口径
+
+- 底座场景套件 445/445 ✅ · 单元测试 205/205 ✅ · 新建 GEO 双域套件 77/77 ✅（`pnpm suite:geo`）· 哈希链 260 事件逐条重算一致 ✅
+- 新建 268 条用例目录 `docs/test-catalog-geo.md`（77 已自动化 / 191 排产）；审查总报告 `docs/review-2026-08-23.md`
+
+### 修复（底座级 ×3）
+
+- **围栏 DSL 能力陷阱（P0）**：`in [...]`/`contains_any()` 不支持 + 路径缺失即熔断，导致 G10 评论四档分流、G15、G-GEO2/3、G16、G17、G20 实战全部「宁可错杀 block」（ai-video Bundle 同病）。expr.ts 扩展列表字面量/in/contains/contains_any；缺失路径在比较语境宽容为不命中，算术与大小比较保持严格。
+- **事件 ID 段撞车（P1）**：seed-geo 误用 8800 段与 hotel 冲突（同租户 UNIQUE），种子验收失败。改 9900 段并立段分配纪律。
+- **agents/triggers 跨工作区撞库（P1）**：裸 id 主键与 seed-video 撞库，ws-geo 丢 4 员工 + 6 触发器（CEO 节拍错指 ws-video）。id 全部加工作区前缀。
+
+### 修复（GEO 集成 ×6）
+
+- floor-scene 补 ceoDesk/lounge/entrance 三要素（双域作战室此前兜底为通用办公区，已截图实证上墙）
+- 私域承接专员补绑 G10a-d（评论四档分流此前无人负责）
+- 询盘打标 `i%2` 逻辑恒单入口修复（90 天硬指标「双入口验证」险假死）
+- 种子审批幂等（ON CONFLICT 改 approval_id）/ 能见度监测官补夜班 / 新增 G-GEO4 信源日发熔断（围栏 16→17 条，对称 G9b）
+
+### 新增
+
+- `scripts/suite-geo.ts`：GEO 双域 77 条（Bundle 完整性/围栏正反例/种子运行态/管线节拍/事件留痕）
+- `apps/web` 工作区可配置（VITE_WS_SLUG/VITE_MEMBER_NO，多工作区过渡方案）
+- 对象模型 +query_item/deal_order/workspace（31 类）
+
 ## [2.0.0] - 2026-08-23 · WorkLoom GEO：社媒短视频营销 × GEO 双域融合经营系统
 
 ### 新增（geo-growth Bundle，底座零改动，一切能力经 Bundle 注入）
 
 - **`bundles/geo-growth/` 双域差异资产包**（依《社媒短视频营销×GEO 融合经营系统落地执行方案 v1.0》全量落地）：
   - **16 个数码员工 preset**：情报组（调研员/引用源分析师）+ 内容组（脚本师/生产编排员/GEO 内容策划/实体一致性管理员）+ 分发组（发布专员/信源分发专员/投放优化师）+ 数据组（数据看板官/AI 能见度监测官/复盘分析师）+ 经营组（客户成功专员/私域承接专员）+ 指挥层（公司CEO captain/集团CEO fleet）；
-  - **双域基线围栏 16 条**（`fences/geo-growth-baseline.yml`，全部 is_baseline 只可加严）：社媒域 G9/G9a/G9b/G10a-d/G12/G15/G16 + GEO 域 G-GEO1（外发必审）/G-GEO2（事实红线一票否决）/G-GEO3（灰帽熔断）+ 双域 G17（只紧不松）/G18（熔断通知+快照）/G20（涉人设品牌表态强制 L4）；
+  - **双域基线围栏 17 条**（`fences/geo-growth-baseline.yml`，全部 is_baseline 只可加严）：社媒域 G9/G9a/G9b/G10a-d/G12/G15/G16 + GEO 域 G-GEO1（外发必审）/G-GEO2（事实红线一票否决）/G-GEO3（灰帽熔断）/G-GEO4（信源日发熔断）+ 双域 G17（只紧不松）/G18（熔断通知+快照）/G20（涉人设品牌表态强制 L4）；
   - **4 条 Quest 主干管线**：intel-fusion（选题情报双向流动）/ dual-content-factory（一次生产两处变现）/ visibility-watch（AI 能见度监测）/ ops-rhythm（日/周/月经营节拍+询盘双入口）；
-  - **双域对象模型 28 类 + 阶段枚举**（schemas/）：query 集/能见度快照/引用源/品牌实体卡/一客一档 v2/双入口询盘/全网存在感战报/回测账本/影子模式对照报告等；账号成长六阶段机 + A/B/C 三层客户画像 + 三条交付线；
+  - **双域对象模型 31 类 + 阶段枚举**（schemas/）：query 集/能见度快照/引用源/品牌实体卡/一客一档 v2/双入口询盘/全网存在感战报/回测账本/影子模式对照报告等；账号成长六阶段机 + A/B/C 三层客户画像 + 三条交付线；
   - **一客一档 v2 Schema**（七模块：企业品牌/产品实体卡/目标市场/内容资产/运营资产/GEO 资产/转化资产 + 数据边界声明）；
   - **6 个 GEO 官方技能套件**：geo-query-craft（query 集四词类×双语）/ ai-answer-rewrite（六段式 AI 答案版改写）/ visibility-monitor（能见度监测+截图存证）/ citation-reverse（引用源逆向分析）/ entity-consistency-check（口径巡检）/ dual-entry-inquiry（询盘双入口归因）；
   - 双域作战室经营剧场场景（floor-scene）+ 工作台 UI 用例（ui/cases）。
-- **`scripts/seed-geo.ts` + `pnpm db:seed:geo`**：双域演示种子（ws-geo 工作区）——16 员工装载、16 条围栏激活、一客一档 v2 建档（佛山锐科机械演示客户）、14 个自动化触发器（情报站 07:00/清晨决策包 08:30/能见度日频+周频/周一经营会/月度回测/夜班巡检/CEO Loop）、五元事件链 60 条（双域场景）、待批请示 ×3（G-GEO1 外发/G12 加投/G20 品牌表态）。
+- **`scripts/seed-geo.ts` + `pnpm db:seed:geo`**：双域演示种子（ws-geo 工作区）——16 员工装载、17 条围栏激活、一客一档 v2 建档（佛山锐科机械演示客户）、14 个自动化触发器（情报站 07:00/清晨决策包 08:30/能见度日频+周频/周一经营会/月度回测/夜班巡检/CEO Loop）、五元事件链 60 条（双域场景）、待批请示 ×3（G-GEO1 外发/G12 加投/G20 品牌表态）。
 - **配置层**：`.env.example` 新增双域段（能见度监测平台/采集节奏/信源分发渠道/数据边界红线开关）；根 package.json 更名 workloom-geo 并注册 `db:seed:geo`。
 - **文档**：`docs/geo-fusion-plan.md`（落地执行方案全量 Markdown 版：90 天逐周排产/定价模型/五大协同/北极星指标）；README 新增「五·六、双域融合」章节，快速开始改指 workloom 仓库。
 

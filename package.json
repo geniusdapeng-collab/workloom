@@ -25,7 +25,8 @@
     "db:verify-chain": "tsx --env-file=.env scripts/verify-chain.ts",
     "suite": "TOOL_UNVERIFIED_RATE=0 tsx --env-file=.env scripts/suite.ts",
     "db:seed:video": "tsx --env-file=.env scripts/seed-video.ts",
-    "db:seed:geo": "tsx --env-file=.env scripts/seed-geo.ts"
+    "db:seed:geo": "tsx --env-file=.env scripts/seed-geo.ts",
+    "suite:geo": "tsx --env-file=.env scripts/suite-geo.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

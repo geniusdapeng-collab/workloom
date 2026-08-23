@@ -93,8 +93,8 @@ rules:
     level: review
     is_baseline: true
     match:
-      object_types: [commercial_doc]
-      actions: [doc.send_external]
+      object_types: [commercial_doc, deal_order]
+      actions: [doc.send_external, deal.send_external]
     when: "params.doc_type in ['quote', 'closure_report', 'commitment', 'contract']"
     note: 报价/结案/承诺/合同等对外商务文件必审后外发（私域域），不得自动发送
 
@@ -138,6 +138,16 @@ rules:
       actions: [geo.publish, source.submit, geo.boost]
     when: "params.technique in ['corpus_pollution', 'fake_multi_source', 'machine_seeding', 'mass_ai_spam']"
     note: 灰帽零容忍：语料污染/伪造多源/机器刷量/批量 AI 垃圾内容命中即熔断+告警；我们承诺「可测量可追溯」，不承诺「保证上榜」
+
+  - rule_id: G-GEO4
+    name: 单账号信源日发超限熔断
+    level: block
+    is_baseline: true
+    match:
+      object_types: [source_task]
+      actions: [geo.publish]
+    when: "context.account_daily_source_published >= 3"
+    note: 信源组对称 G9b 纪律：单账号信源平台日发上限 3 条（信源平台对批量发帖更敏感），超限熔断+告警；宪章 geo_publish_per_day_cap 为其上限来源
 
   # ---- 双域通用 ----
   - rule_id: G20

@@ -74,11 +74,12 @@
 | G-GEO1 | review | GEO 内容外发必审 | GEO |
 | G-GEO2 | block | 事实红线一票否决（ProductTruthChecker） | 双域 |
 | G-GEO3 | block | 灰帽手段熔断（语料污染/伪造多源/机器刷量） | GEO |
+| G-GEO4 | block | 单账号信源日发≥3条熔断（对称 G9b） | GEO |
 | G20 | block | 涉人设/品牌表态内容强制 L4 人审 | 双域 |
 | G17 | block | 自治边界放宽必须 L4（只紧不松） | 双域 |
 | G18 | auto+留痕 | 熔断触发即时通知+边界快照 | 双域 |
 
-> 代码落点：`bundles/geo-growth/fences/geo-growth-baseline.yml`（16 条规则实体，G10a-d 计 4 条）。
+> 代码落点：`bundles/geo-growth/fences/geo-growth-baseline.yml`（17 条规则实体，G10a-d 计 4 条）。
 
 ### 2.4 Quest 管线（4 条主干）
 

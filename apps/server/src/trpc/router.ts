@@ -94,6 +94,7 @@ import {
   listProfileSlugs,
   recheckBundle,
 } from "@workloom/base/bundles";
+import { videoRouter } from "../video/router.js";
 
 /** system router：健康检查（公开） */
 const systemRouter = router({
@@ -135,7 +136,9 @@ function locateEnvFile(): string {
   return join(process.cwd(), ".env");
 }
 
-/** 四 env 写回 .env（保留其他行）+ 同步 process.env + 清 LLM 缓存（全链即时生效，无需重启） */
+/** 四 env 写回 .env（保留其他行）+ 同步 process.env + 清 LLM 缓存（全链即时生效，无需重启）
+ * 注意（D26 审计#5）：LLM 装配为进程级全局——部署口径是「一进程一工作区」（local-first 单店），
+ * 多工作区共享进程时全租户共用同一装配；按工作区留痕仅为审计归属，不构成隔离。 */
 function persistLlmEnv(cfg: { provider: string; baseUrl: string; apiKey: string; model: string }): void {
   const file = locateEnvFile();
   const lines = existsSync(file) ? readFileSync(file, "utf8").split("\n") : [];
@@ -480,7 +483,7 @@ const threadsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const scope = scopeOf(ctx.identity);
-      // F3.2 意图路由（B8 接线：真实模型分类 → 超时/异常规则兜底 → 含糊反问）
+      // F3.2 意图路由（B8 接线：真实模型分类 → 超时/异常规则兜底 → 含糊反问；via 留痕）
       const intent = await routeIntent(input.title, intentClassifier());
       if (intent.kind === "clarify") {
         // 含糊指令：反问澄清，不盲目建任务
@@ -1589,7 +1592,7 @@ const rosterRouter = router({
             constraints: agent.meta?.prompt?.constraints ?? [],
           },
           workspaceName: ws.rows[0]?.name ?? "",
-          bundle: "workloom-hotel", // 首版唯一行业 Bundle（D2）
+          bundle: "hyperreality-ai-video", // 首版唯一行业 Bundle（D2）
           nightWindow: { open: inNightWindow(), range: "22:00–08:00" },
           fences: agent.fence_bindings.map((ruleId) => {
             const hit = fences.find((f) => f.rule_id === ruleId);
@@ -1806,7 +1809,7 @@ const bundlesRouter = router({
           c.release();
         }
       })();
-      const activeSlug = ws.rows[0]?.industry ?? "hotel";
+      const activeSlug = ws.rows[0]?.industry ?? "ai-video";
       const slugs = listProfileSlugs();
       const profiles = [] as Awaited<ReturnType<typeof computeAssembly>>[];
       for (const s of slugs) {
@@ -1861,12 +1864,12 @@ const bundlesRouter = router({
 });
 
 /**
- * B8 · 意图分类器装配：LLM_PROVIDER 非 mock 且凭据齐备 → LlmIntentClassifier（真实模型，含注入防护+白名单+规则兜底）；
- * 默认 mock 或未配置 → undefined（ruleBasedRoute 确定性规则直译，D4 全流程可跑口径）。
- * 分类结果 via 字段留痕（llm / rule / timeout_fallback），任务卡可见路由来源。
+ * 统一 LLM 调用面（B8/B9）：LLM_PROVIDER 非 mock 且凭据齐备 → 真实模型；
+ * 默认 mock 或未配置 → undefined（各链路走确定性兜底，D4 全流程可跑）。
+ * 模型出站强制脱敏（L6.2，OpenAiCompatibleProvider 内建不可绕过）。
+ * 落地向导契约：写入 LLM_PROVIDER/LLM_BASE_URL/LLM_API_KEY/LLM_MODEL 四 env 即全链真实化。
  */
 let cachedLlmCall: ((prompt: string) => Promise<string>) | null | undefined;
-/** 统一 LLM 调用面（B8/B9）：未配置真实模型 → undefined（各链路走确定性兜底，D4 全流程可跑） */
 function llmCall(): ((prompt: string) => Promise<string>) | undefined {
   if (cachedLlmCall !== undefined) return cachedLlmCall ?? undefined;
   try {
@@ -1876,8 +1879,8 @@ function llmCall(): ((prompt: string) => Promise<string>) | undefined {
     }
     const provider = providerFromEnv(process.env.LLM_MODEL ?? "deepseek-chat");
     cachedLlmCall = async (prompt: string) => {
-      const r = await provider.chat([{ role: "user", content: prompt }]);
-      return r.text;
+      const res = await provider.chat([{ role: "user", content: prompt }]);
+      return res.text;
     };
     return cachedLlmCall;
   } catch {
@@ -1895,234 +1898,6 @@ function intentClassifier(): IntentClassifier | undefined {
 }
 
 /**
- * 酒店经营态查询（P10 断点看板 / P11 价格健康 / P12 经营目标 数据源）
- * 全部读路径：app 池 + 事务级双 GUC（RLS 口径与既有查询一致）；
- * 数据全部来自五元事件库与一店一档——无独立模拟源（样板间工程纪律：前后端数据打通）。
- */
-async function queryEventsByActions(
-  scope: { tenantId: string; workspaceId: string },
-  actions: string[],
-  limit: number,
-): Promise<Array<Record<string, unknown>>> {
-  const app = getAppPool();
-  const client = await app.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
-    await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
-    const r = await client.query<{ payload: Record<string, unknown> }>(
-      `SELECT payload FROM biz_events
-       WHERE workspace_id=$1 AND payload->'decision'->>'action' = ANY($2::text[])
-       ORDER BY seq DESC LIMIT $3`,
-      [scope.workspaceId, actions, limit],
-    );
-    await client.query("COMMIT");
-    return r.rows.map((x) => x.payload);
-  } catch (err) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw err;
-  } finally {
-    client.release();
-  }
-}
-
-const twinRouter = router({
-  /** P10 断点看板：断点闭环事件（根因四分类）+ 周频断点率周报 */
-  incidents: protectedProcedure.query(async ({ ctx }) => {
-    const scope = scopeOf(ctx.identity);
-    const [incidents, weekly] = await Promise.all([
-      queryEventsByActions(scope, ["incident.postmortem"], 50),
-      queryEventsByActions(scope, ["incident.weekly.report"], 12),
-    ]);
-    return { incidents, weekly };
-  }),
-
-  /** P11 价格健康：倒挂熔断 / 超售防护 / 修复留痕 / 调价事件流 */
-  priceHealth: protectedProcedure.query(async ({ ctx }) => {
-    const scope = scopeOf(ctx.identity);
-    const [blocks, fixes, adjusts] = await Promise.all([
-      queryEventsByActions(scope, ["price.publish", "inventory.sync"], 50),
-      queryEventsByActions(scope, ["channel.parity.fixed", "inventory.sync.restore"], 20),
-      queryEventsByActions(scope, ["price.adjust"], 30),
-    ]);
-    return { blocks, fixes, adjusts };
-  }),
-
-  /** P12 经营目标：一店一档 goals 字段组 + 周频 goal.tracking 达成追踪 */
-  goals: protectedProcedure.query(async ({ ctx }) => {
-    const scope = scopeOf(ctx.identity);
-    const app = getAppPool();
-    const client = await app.connect();
-    try {
-      await client.query("BEGIN");
-      await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
-      await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
-      const prof = await client.query<{ archive: { goals?: unknown } }>(
-        `SELECT archive FROM profiles WHERE workspace_id=$1`,
-        [scope.workspaceId],
-      );
-      await client.query("COMMIT");
-      const trackings = await queryEventsByActions(scope, ["goal.tracking"], 16);
-      return { goals: prof.rows[0]?.archive?.goals ?? null, trackings };
-    } catch (err) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      throw err;
-    } finally {
-      client.release();
-    }
-  }),
-
-  /** 通用事件流（P13–P19 各页数据源；read-only、workspace 作用域、RLS 内） */
-  events: protectedProcedure
-    .input(z.object({ actions: z.array(z.string()).min(1).max(12), limit: z.number().int().min(1).max(200).default(60) }))
-    .query(async ({ ctx, input }) => {
-      return queryEventsByActions(scopeOf(ctx.identity), input.actions, input.limit);
-    }),
-
-  /** 单对象全链穿透（P13 订单/房间时间线：按 object.id 正序回放） */
-  objectTrail: protectedProcedure
-    .input(z.object({ objectId: z.string().min(1).max(64), limit: z.number().int().min(1).max(100).default(50) }))
-    .query(async ({ ctx, input }) => {
-      const scope = scopeOf(ctx.identity);
-      const app = getAppPool();
-      const client = await app.connect();
-      try {
-        await client.query("BEGIN");
-        await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
-        await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
-        const r = await client.query<{ payload: Record<string, unknown> }>(
-          `SELECT payload FROM biz_events
-           WHERE workspace_id=$1 AND payload->'object'->>'id' = $2
-           ORDER BY seq ASC LIMIT $3`,
-          [scope.workspaceId, input.objectId, input.limit],
-        );
-        await client.query("COMMIT");
-        return r.rows.map((x) => x.payload);
-      } catch (err) {
-        await client.query("ROLLBACK").catch(() => undefined);
-        throw err;
-      } finally {
-        client.release();
-      }
-    }),
-
-  /** P20 一店一档全景（21 字段组） */
-  archive: protectedProcedure.query(async ({ ctx }) => {
-    const scope = scopeOf(ctx.identity);
-    const app = getAppPool();
-    const client = await app.connect();
-    try {
-      await client.query("BEGIN");
-      await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
-      await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
-      const prof = await client.query<{ archive: unknown; forbidden: unknown }>(
-        `SELECT archive, forbidden FROM profiles WHERE workspace_id=$1`,
-        [scope.workspaceId],
-      );
-      await client.query("COMMIT");
-      return prof.rows[0] ?? null;
-    } catch (err) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      throw err;
-    } finally {
-      client.release();
-    }
-  }),
-
-  /** P18 多店驾驶舱：同租户各工作区最新经营快照 + 昨夜决策包（逐工作区 RLS 上下文轮询） */
-  stores: protectedProcedure.query(async ({ ctx }) => {
-    const scope = scopeOf(ctx.identity);
-    const app = getAppPool();
-    const client = await app.connect();
-    try {
-      await client.query("BEGIN");
-      await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
-      const wss = await client.query<{ id: string; name: string }>(
-        `SELECT id, name FROM workspaces WHERE tenant_id=$1 ORDER BY created_at`,
-        [scope.tenantId],
-      );
-      const out: Array<Record<string, unknown>> = [];
-      for (const ws of wss.rows) {
-        await client.query("SELECT set_config('app.workspace_id', $1, true)", [ws.id]);
-        const daily = await client.query<{ payload: Record<string, unknown> }>(
-          `SELECT payload FROM biz_events
-           WHERE workspace_id=$1 AND payload->'decision'->>'action'='store.daily.summary'
-           ORDER BY seq DESC LIMIT 1`,
-          [ws.id],
-        );
-        const pkg = await client.query<{ payload: Record<string, unknown> }>(
-          `SELECT payload FROM biz_events
-           WHERE workspace_id=$1 AND payload->'decision'->>'action'='night.package.deliver'
-           ORDER BY seq DESC LIMIT 1`,
-          [ws.id],
-        );
-        const counts = await client.query<{ n: string }>(
-          `SELECT count(*)::text AS n FROM biz_events WHERE workspace_id=$1`,
-          [ws.id],
-        );
-        out.push({
-          workspaceId: ws.id, name: ws.name,
-          daily: daily.rows[0]?.payload ?? null,
-          nightPackage: pkg.rows[0]?.payload ?? null,
-          eventCount: Number(counts.rows[0]?.n ?? 0),
-        });
-      }
-      await client.query("COMMIT");
-      return out;
-    } catch (err) {
-      await client.query("ROLLBACK").catch(() => undefined);
-      throw err;
-    } finally {
-      client.release();
-    }
-  }),
-
-  /** P19 收益分析：预设问数（真实聚合自事件库；自然语言自由查询在 LLM 接线后开放） */
-  report: protectedProcedure
-    .input(z.object({ question: z.enum(["channel_revenue", "occ_trend", "price_attribution"]) }))
-    .query(async ({ ctx, input }) => {
-      const scope = scopeOf(ctx.identity);
-      if (input.question === "channel_revenue") {
-        const evs = await queryEventsByActions(scope, ["order.confirm"], 200);
-        const byChannel = new Map<string, { orders: number; revenue: number }>();
-        for (const ev of evs) {
-          const ch = String((ev.context as Record<string, unknown>)?.channel ?? "直连");
-          const amount = Number(((ev.decision as Record<string, unknown>)?.params as Record<string, unknown>)?.amount ?? 0);
-          const cur = byChannel.get(ch) ?? { orders: 0, revenue: 0 };
-          cur.orders += 1; cur.revenue += amount;
-          byChannel.set(ch, cur);
-        }
-        return { kind: input.question, rows: [...byChannel.entries()].map(([channel, v]) => ({ channel, ...v })) };
-      }
-      if (input.question === "occ_trend") {
-        const evs = await queryEventsByActions(scope, ["store.daily.summary"], 30);
-        const rows = evs
-          .map((ev) => ({
-            date: String((ev.context as Record<string, unknown>)?.time ?? "").slice(0, 10),
-            occ: ((ev.decision as Record<string, unknown>)?.after as Record<string, unknown>)?.occ ?? null,
-            adr: ((ev.decision as Record<string, unknown>)?.after as Record<string, unknown>)?.adr ?? null,
-            revpar: ((ev.decision as Record<string, unknown>)?.after as Record<string, unknown>)?.revpar ?? null,
-          }))
-          .reverse();
-        return { kind: input.question, rows };
-      }
-      const evs = await queryEventsByActions(scope, ["price.adjust"], 60);
-      const rows = evs.map((ev) => {
-        const d = ev.decision as Record<string, unknown>;
-        return {
-          time: String((ev.context as Record<string, unknown>)?.time ?? ""),
-          object: String((ev.object as Record<string, unknown>)?.label ?? (ev.object as Record<string, unknown>)?.id ?? ""),
-          before: (d.before as Record<string, unknown>)?.price ?? null,
-          after: (d.after as Record<string, unknown>)?.price ?? null,
-          rule: (ev.rule_impact as Array<{ rule_id?: string }>)?.[0]?.rule_id ?? "",
-          basis: (d.basis as string[]) ?? [],
-        };
-      });
-      return { kind: input.question, rows };
-    }),
-});
-
-/**
  * 数字CEO（D21）：治理状态 + 深度授权 + 节拍手动触发 + 董事长队列 + 成绩单。
  * 写操作一律五元事件留痕；mode 守卫在节拍引擎内双保险（§12）。
  */
@@ -2130,6 +1905,14 @@ const twinRouter = router({
 const RISK_DISCLOSURE_VERSION = "risk-v1";
 /** 深度授权必确认条款（§12.2 第②步，逐条勾选缺一不可） */
 const REQUIRED_CLAUSES = ["自主调价", "自主采购", "自主对外回复", "试用降档规则", "AI 非法律责任主体·授权人承担经营决策责任"];
+
+/** 宪章读写串行锁（D26 审计#6：grant/transit 为 load→transition→save 读改写，并发互踩会留下 from/to 失真的留痕） */
+let charterLock: Promise<unknown> = Promise.resolve();
+function withCharterLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = charterLock.then(fn, fn);
+  charterLock = run.catch(() => undefined);
+  return run;
+}
 
 async function saveCharter(app: ReturnType<typeof getAppPool>, scope: { tenantId: string; workspaceId: string }, charter: unknown): Promise<void> {
   const client = await app.connect();
@@ -2194,6 +1977,7 @@ const captainRouter = router({
       if (missing.length) throw new TRPCError({ code: "BAD_REQUEST", message: `授权条款未全部确认：${missing.join("、")}` });
       if (!input.identityConfirmed) throw new TRPCError({ code: "BAD_REQUEST", message: "未完成身份核验（§12.2 第⑤步）" });
       const app = getAppPool();
+      return withCharterLock(async () => {
       const charter = await loadCharter(app, scope);
       const grantEventId = `E-GRANT-${Date.now().toString(36).toUpperCase()}`;
       const next = transition({ ...charter, autonomy: input.autonomy }, {
@@ -2221,6 +2005,7 @@ const captainRouter = router({
         model_trace: { model_id: "human-chairman", tier: "standard" },
       });
       return { mode: next.mode, grantEventId };
+      });
     }),
 
   /** 治理迁移：advance/expire/keep_long/keep_until/revoke/close（§12.1 状态机） */
@@ -2229,6 +2014,7 @@ const captainRouter = router({
     .mutation(async ({ ctx, input }) => {
       const scope = scopeOf(ctx.identity);
       const app = getAppPool();
+      return withCharterLock(async () => {
       const charter = await loadCharter(app, scope);
       const t: CeoTransition = input.kind === "keep_until"
         ? { kind: "keep_until", until: input.until ?? new Date(Date.now() + 30 * 86400e3).toISOString() }
@@ -2256,6 +2042,7 @@ const captainRouter = router({
         model_trace: { model_id: "human-chairman", tier: "standard" },
       });
       return { mode: next.mode };
+      });
     }),
 
   /** 手动触发节拍（演示/调度共用入口）：briefing/queue/deviation/breaker */
@@ -2482,6 +2269,84 @@ const captainRouter = router({
   scorecard: protectedProcedure.query(async ({ ctx }) => {
     return buildScorecard(getAppPool(), scopeOf(ctx.identity));
   }),
+
+  /**
+   * 晨会交接单投影：captain loop 无现成夜班计划投影函数，按约定读
+   * night_runs（最近班次）+ triggers（enabled 派遣模板）聚合。
+   * 无夜班数据 → nightRun null + mock:true 明确标注（Mock 兜底，不伪造）。
+   */
+  handoffPlan: protectedProcedure.query(async ({ ctx }) => {
+    const scope = scopeOf(ctx.identity);
+    const app = getAppPool();
+    const client = await app.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+      const run = await client.query<{
+        id: string; run_date: string; status: string; candidate_count: number;
+        stats: Record<string, unknown>; fence_snapshot_version: string | null; started_at: string | null;
+      }>(
+        `SELECT id, run_date, status, candidate_count, stats, fence_snapshot_version, started_at
+         FROM night_runs WHERE workspace_id=$1 ORDER BY run_date DESC, created_at DESC LIMIT 1`,
+        [scope.workspaceId],
+      );
+      const triggers = await client.query<{
+        id: string; name: string; kind: string; schedule: string; action: Record<string, unknown>;
+      }>(
+        `SELECT id, name, kind, schedule, action FROM triggers
+         WHERE workspace_id=$1 AND enabled=true ORDER BY id`,
+        [scope.workspaceId],
+      );
+      const briefing = await client.query<{ text: string | null; created_at: string }>(
+        `SELECT payload->'decision'->'after'->>'text' AS text, created_at
+         FROM biz_events WHERE workspace_id=$1 AND payload->'decision'->>'action'='ceo.briefing'
+         ORDER BY seq DESC LIMIT 1`,
+        [scope.workspaceId],
+      );
+      await client.query("COMMIT");
+      const nightRun = run.rows[0] ?? null;
+      return {
+        nightRun,
+        triggers: triggers.rows,
+        latestBriefing: briefing.rows[0] ?? null,
+        mock: nightRun === null,
+        note: nightRun === null
+          ? "无夜班班次数据，交接单为 Mock 兜底投影（triggers 为实时读取，nightRun 置空标注）"
+          : null,
+      };
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
+  }),
+
+  /** 晨会交接确认：董事长确认接手夜班计划 → captain.handoff_confirmed 事件留痕 */
+  handoffConfirm: writeProcedure
+    .input(z.object({
+      runDate: z.string().min(1),
+      note: z.string().max(500).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const scope = scopeOf(ctx.identity);
+      const r = await gatewayAppend(getGatewayPool(), {
+        ...scope, actor: { id: ctx.identity.memberNo, type: "human" },
+        sessionId: `ceo-handoff-${scope.workspaceId}`,
+      }, {
+        who: { type: "human", id: ctx.identity.memberNo },
+        context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
+        object: { type: "company_ceo", id: scope.workspaceId },
+        decision: {
+          action: "captain.handoff_confirmed",
+          params: { run_date: input.runDate },
+          after: { note: input.note ?? null },
+          basis: [`晨会交接确认：董事长确认接手 ${input.runDate} 夜班计划（交接单投影见 captain.handoffPlan）`],
+        },
+        rule_impact: [],
+      });
+      return { ok: true, eventId: r.eventId };
+    }),
 });
 
 
@@ -2500,7 +2365,7 @@ export const appRouter = router({
   roster: rosterRouter,
   im: imRouter,
   bundles: bundlesRouter,
-  twin: twinRouter,
+  video: videoRouter,
   captain: captainRouter,
 });
 

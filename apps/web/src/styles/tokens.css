@@ -136,14 +136,6 @@
   }
 }
 
-/* 移动端适配（样板间工程：手机上可看可用——隐藏侧栏、主区全宽；≤1240px 舰桥贴边） */
-@media (max-width: 1240px) {
-  .w-bridge { width: calc(100vw - 16px) !important; }
-}
-@media (max-width: 860px) {
-  .w-col-left, .w-col-right { display: none !important; }
-}
-
 /* P0 经营剧场动画 */
 @keyframes holo-spin { from { transform: rotateX(68deg) rotateZ(0deg); } to { transform: rotateX(68deg) rotateZ(360deg); } }
 @keyframes holo-core-pulse { 0%,100% { opacity: .75; } 50% { opacity: 1; } }

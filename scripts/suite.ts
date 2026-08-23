@@ -292,7 +292,7 @@ c("种子基线规则装载 ≥6 条且含 R1-R6", async () => {
 });
 c("R1 涨幅 ≤8% → auto", async () => {
   const rules = await activeRules();
-  const v = judge({ object: { type: "room_price", id: "RT-DLX-KING" }, action: "price.adjust", before: { price: 458 }, after: { price: 468 }, context: { channel_new: false, night_shift: false } }, rules, "review");
+  const v = judge({ object: { type: "room_price", id: "RT-DLX-KING" }, action: "price.adjust", before: { price: 458 }, after: { price: 468 }, context: { channel_new: false } }, rules, "review");
   eq(v.level, "auto", `判定（${v.triggeredBy.join("/")}）`);
 });
 c("R2 破保底价 ¥380 → block 熔断", async () => {
@@ -1231,7 +1231,7 @@ h("D15-② 流水线：扫描不过连提案都进不了", async () => {
 h("D15-② 流水线：提案 → 双人复核 → 完成上架全链路", async () => {
   const { proposePublish, reviewPublish, completePublish } = await import("@workloom/base/skills");
   const skillId = `skill-t-ws-yunqi-pub-${SFX}`;
-  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'team','workloom-hotel','上架测试','1.0.0','干净描述','[]','干净正文',false)`, [skillId]);
+  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'team','hyperreality-ai-video','上架测试','1.0.0','干净描述','[]','干净正文',false)`, [skillId]);
   const p = await proposePublish(app, gw, scope, { skillId, skillName: "上架测试", body: "干净正文", description: "干净描述", by: "MEM-001" });
   assert(!p.deduped, "提案成功");
   const r1 = await reviewPublish(app, gw, scope, { reviewId: p.reviewId, by: "MEM-002", gesture: "approve" });
@@ -1251,7 +1251,7 @@ h("D15-② 流水线：提案 → 双人复核 → 完成上架全链路", async
 h("D15-② 流水线：提案人禁止自批", async () => {
   const { proposePublish, reviewPublish } = await import("@workloom/base/skills");
   const skillId = `skill-t-ws-yunqi-self-${SFX}`;
-  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'team','workloom-hotel','自批测试','1.0.0','d','[]','b',false)`, [skillId]);
+  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'team','hyperreality-ai-video','自批测试','1.0.0','d','[]','b',false)`, [skillId]);
   const p = await proposePublish(app, gw, scope, { skillId, skillName: "自批测试", body: "干净正文", description: "", by: "MEM-001" });
   let threw = false;
   try { await reviewPublish(app, gw, scope, { reviewId: p.reviewId, by: "MEM-001", gesture: "approve" }); } catch { threw = true; }
@@ -1262,7 +1262,7 @@ h("D15-② 流水线：提案人禁止自批", async () => {
 h("D15-② 流水线：驳回必填原因 + 重复复核幂等", async () => {
   const { proposePublish, reviewPublish } = await import("@workloom/base/skills");
   const skillId = `skill-t-ws-yunqi-rej-${SFX}`;
-  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'team','workloom-hotel','驳回测试','1.0.0','d','[]','b',false)`, [skillId]);
+  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'team','hyperreality-ai-video','驳回测试','1.0.0','d','[]','b',false)`, [skillId]);
   const p = await proposePublish(app, gw, scope, { skillId, skillName: "驳回测试", body: "干净正文", description: "", by: "MEM-001" });
   let noReason = false;
   try { await reviewPublish(app, gw, scope, { reviewId: p.reviewId, by: "MEM-002", gesture: "reject" }); } catch { noReason = true; }
@@ -1277,7 +1277,7 @@ h("D15-② 流水线：驳回必填原因 + 重复复核幂等", async () => {
 h("D15-④ 吊销：吊销技能禁止新安装（kill switch）", async () => {
   const { revokeSkill, installSkill } = await import("@workloom/base/skills");
   const skillId = `skill-t-ws-yunqi-rev-${SFX}`;
-  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'official','workloom-hotel','吊销测试','1.0.0','d','[]','b',true)`, [skillId]);
+  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'official','hyperreality-ai-video','吊销测试','1.0.0','d','[]','b',true)`, [skillId]);
   await revokeSkill(app, gw, scope, { skillId, reason: "发现恶意行为", by: "MEM-001" });
   let threw = false;
   try { await installSkill(app, gw, scope, { skillId, by: "MEM-001" }); } catch (err) { threw = String((err as Error).message).includes("吊销"); }
@@ -1289,7 +1289,7 @@ h("D15-④ 吊销：装配围栏并集排除吊销技能", async () => {
   const { revokeSkill, installSkill, resolveAgentFenceBindings } = await import("@workloom/base/skills");
   const skillId = `skill-t-ws-yunqi-revasm-${SFX}`;
   // 绑定用 R5：种子安装行（skill-revenue-manager）快照含 R1/R2，用 R2 会被种子行干扰
-  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'official','workloom-hotel','装配吊销','1.0.0','d','["R5"]','b',true)`, [skillId]);
+  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'official','hyperreality-ai-video','装配吊销','1.0.0','d','["R5"]','b',true)`, [skillId]);
   await installSkill(app, gw, scope, { skillId, by: "MEM-001" });
   const ag = await qApp<{ id: string }>(`SELECT id FROM agents WHERE workspace_id=$1 AND preset_key='content-agent'`, [scope.workspaceId]);
   const before = await resolveAgentFenceBindings(app, scope, ag.rows[0]!.id);
@@ -1305,7 +1305,7 @@ h("D15-④ 吊销：装配围栏并集排除吊销技能", async () => {
 h("D15-④ 吊销：重复吊销幂等", async () => {
   const { revokeSkill } = await import("@workloom/base/skills");
   const skillId = `skill-t-ws-yunqi-rev2-${SFX}`;
-  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'official','workloom-hotel','重复吊销','1.0.0','d','[]','b',true)`, [skillId]);
+  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'official','hyperreality-ai-video','重复吊销','1.0.0','d','[]','b',true)`, [skillId]);
   const r1 = await revokeSkill(app, gw, scope, { skillId, reason: "第一次", by: "MEM-001" });
   const r2 = await revokeSkill(app, gw, scope, { skillId, reason: "第二次", by: "MEM-001" });
   eq(r1.deduped, false, "首次生效");
@@ -1316,7 +1316,7 @@ h("D15-④ 吊销：重复吊销幂等", async () => {
 h("D15-⑤ 版本通道：安装记版本快照，升版后可检出更新", async () => {
   const { installSkill, listSkillUpdates, uninstallSkill } = await import("@workloom/base/skills");
   const skillId = `skill-t-ws-yunqi-ver-${SFX}`;
-  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'official','workloom-hotel','版本通道','1.0.0','d','[]','b',true)`, [skillId]);
+  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'official','hyperreality-ai-video','版本通道','1.0.0','d','[]','b',true)`, [skillId]);
   await installSkill(app, gw, scope, { skillId, by: "MEM-001" });
   eq((await listSkillUpdates(app, scope)).filter((u) => u.skillId === skillId).length, 0, "同版无更新提示");
   await qApp(`UPDATE skills SET version='1.1.0' WHERE id=$1`, [skillId]);
@@ -1992,6 +1992,14 @@ p("前后端契约对账：web 全部 trpc 调用点均有后端挂载", async (
       procs.add(`${rm[1]}.${pm[1]}`);
     }
   }
+  // 子模块路由（video: videoRouter 挂载于 apps/server/src/video/router.ts）：
+  // 解析其子 Router 名，映射为 video.<sub>（如 cmsRouter → video.cms）
+  try {
+    const videoSrc = readFileSync(join(root, "apps/server/src/video/router.ts"), "utf-8");
+    for (const rm of videoSrc.matchAll(/(\w+)Router = router\(\{/g)) {
+      procs.add(`video.${(rm[1] as string).replace(/Router$/, "")}`);
+    }
+  } catch { /* 无子模块时跳过 */ }
   const missing = [...calls].filter((c) => !procs.has(c));
   eq(missing.length, 0, `悬空调用：${missing.join(",")}`);
 });
@@ -2408,6 +2416,77 @@ h2("onboarding 经营主体写入 + 启用真实模式（横幅熄灭）→ 复�
   assert(Number(ev.rows[0]!.n) >= 1, "切换留痕");
   // 复位：套件出口保持种子模拟态（事件保留，append-only 纪律）
   await qApp(`UPDATE profiles SET archive=jsonb_set(archive,'{dataMode}','"simulated"'::jsonb) WHERE workspace_id=$1`, [scope.workspaceId]);
+});
+
+/* ---- D26 大版本融合 E2E：LLM 装配×节拍 / 开箱运行态 / 真实模式融合 / P21 互洽 / 降级链 ---- */
+h2("融合·LLM 装配后节拍真实推理（runBeat via=llm）→ 还原", async () => {
+  llmStub = createServer((req, res) => {
+    if (req.method === "POST" && req.url === "/v1/chat/completions") {
+      req.on("data", () => undefined);
+      req.on("end", () => {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify({ choices: [{ message: { content: `晨报：今日经营稳中向好 E2E-BEAT-MARK-${Date.now().toString(36)}` } }], usage: { prompt_tokens: 10, completion_tokens: 20 } }));
+      });
+    } else { res.writeHead(404); res.end(); }
+  });
+  await new Promise<void>((r) => llmStub!.listen(STUB_PORT, "127.0.0.1", () => r()));
+  await api("/trpc/onboarding.saveLlmConfig", { method: "POST", token: tokenOwner, body: { provider: "e2e-stub", baseUrl: `http://127.0.0.1:${STUB_PORT}/v1`, apiKey: "sk-e2e-dummy", model: "stub-real-1" } });
+  const { data } = await api<{ result?: { data?: { eventId?: string; via?: string } } }>("/trpc/captain.runBeat", { method: "POST", token: tokenOwner, body: { beat: "daily" } });
+  eq(data.result?.data?.via, "llm", "节拍走真实模型");
+  await api("/trpc/onboarding.saveLlmConfig", { method: "POST", token: tokenOwner, body: { provider: "mock", baseUrl: "", apiKey: "", model: "" } });
+  if (llmStub) { await new Promise<void>((r) => llmStub!.close(() => r())); llmStub = null; }
+});
+h2("融合·开箱运行态（种子即重度使用：卫星/实况/职场/请示/模拟横幅全到位）", async () => {
+  const { data } = await api<{ result?: { data?: {
+    satellites?: unknown[]; ticker?: unknown[];
+    floor?: { scene?: { id?: string }; agents?: Array<{ state: string; stationId: string | null; statusLine: string }> } | null;
+  } } }>("/trpc/captain.theater", { token: tokenOwner });
+  const d = data.result?.data;
+  assert((d?.satellites ?? []).length >= 5, "员工卫星群 ≥5");
+  assert((d?.ticker ?? []).length >= 10, "实况字幕流 ≥10");
+  assert(d?.floor, "floor 段在场");
+  eq(d?.floor?.scene?.id, "hotel-lobby", "行业场景包命中（前厅）");
+  const agents = d?.floor?.agents ?? [];
+  assert(agents.length >= 5, "职场员工 ≥5");
+  assert(agents.some((a) => a.state === "asking"), "开箱即有举手请示（种子 pending 审批）");
+  for (const a of agents) if (a.state !== "disabled") { assert(a.stationId, "人人有工位"); assert(a.statusLine, "人人有状态语"); }
+  const { data: st } = await api<{ result?: { data?: { dataMode?: string; llm?: { real?: boolean } } } }>("/trpc/onboarding.status", { token: tokenOwner });
+  eq(st.result?.data?.dataMode, "simulated", "模拟横幅数据源成立");
+  eq(st.result?.data?.llm?.real, false, "mock 如实标注");
+});
+h2("融合·activateRealMode 后剧场/职场不受影响（模式切换纯标签）", async () => {
+  const before = await api<{ result?: { data?: { satellites?: unknown[] } } }>("/trpc/captain.theater", { token: tokenOwner });
+  await api("/trpc/onboarding.activateRealMode", { method: "POST", token: tokenOwner });
+  const { data: st } = await api<{ result?: { data?: { dataMode?: string } } }>("/trpc/onboarding.status", { token: tokenOwner });
+  eq(st.result?.data?.dataMode, "real", "切换生效");
+  const after = await api<{ result?: { data?: { satellites?: unknown[] } } }>("/trpc/captain.theater", { token: tokenOwner });
+  eq((after.data.result?.data?.satellites ?? []).length, (before.data.result?.data?.satellites ?? []).length, "剧场数据面稳定");
+  await qApp(`UPDATE profiles SET archive=jsonb_set(archive,'{dataMode}','"simulated"'::jsonb) WHERE workspace_id=$1`, [scope.workspaceId]);
+});
+h2("融合·P21 三端点互洽（state/theater/chairmanQueue/scorecard）", async () => {
+  const [state, theater, queue, score] = await Promise.all([
+    api<{ result?: { data?: { charter?: { mode?: string } } } }>("/trpc/captain.state", { token: tokenOwner }),
+    api<{ result?: { data?: { mode?: string; pendingByTier?: Record<string, number> } } }>("/trpc/captain.theater", { token: tokenOwner }),
+    api<{ result?: { data?: unknown[] } }>("/trpc/captain.chairmanQueue", { token: tokenOwner }),
+    api<{ result?: { data?: { briefings?: number } } }>("/trpc/captain.scorecard", { token: tokenOwner }),
+  ]);
+  eq(state.data.result?.data?.charter?.mode, theater.data.result?.data?.mode, "治理态两端一致");
+  const l4n = theater.data.result?.data?.pendingByTier?.l4_chairman ?? 0;
+  eq((queue.data.result?.data ?? []).length, Math.min(l4n, 20), "L4 队列=分层计数（队列上限 20 截断口径）");
+  assert(typeof score.data.result?.data?.briefings === "number", "成绩单数值在场");
+});
+h2("融合·LLM 降级链：死端配置被拒 → mock 兜底应答不断链", async () => {
+  const { data } = await api<{ error?: { data?: { httpStatus?: number } } }>("/trpc/onboarding.saveLlmConfig", {
+    method: "POST", token: tokenOwner, body: { provider: "dead", baseUrl: "http://127.0.0.1:9/v1", apiKey: "sk-dead", model: "dead-1" },
+  });
+  eq(data.error?.data?.httpStatus, 400, "死端实测不过 → 拒绝落盘");
+  const { data: st } = await api<{ result?: { data?: { llm?: { real?: boolean } } } }>("/trpc/onboarding.status", { token: tokenOwner });
+  eq(st.result?.data?.llm?.real, false, "仍为 mock");
+  const { data: ask } = await api<{ result?: { data?: { mode?: string; answer?: string } } }>("/trpc/threads.dispatch", {
+    method: "POST", token: tokenManager, body: { title: "现在待审批有几项？" },
+  });
+  eq(ask.result?.data?.mode, "ask", "ask 路由正常");
+  assert((ask.result?.data?.answer ?? "").length > 10, "rule 兜底应答生成（不断链）");
 });
 
 
@@ -2912,12 +2991,12 @@ h2("onboarding 经营主体写入 + 启用真实模式（横幅熄灭）→ 复�
      VALUES ($1,$2,$3,'探针员工','v1','specialist',false,'[]','[]','ready') ON CONFLICT (id) DO NOTHING`,
     [`agt-${PROBE}`, scope.workspaceId, PROBE],
   );
-  const probeEvent = async (action: string) => (await gatewayAppend(gw, { ...scope, actor: { id: PROBE, type: "agent" }, sessionId: `suite-v-${SFX}` }, {
+  const probeEvent = async (action: string, ruleImpact: Array<Record<string, unknown>> = []) => (await gatewayAppend(gw, { ...scope, actor: { id: PROBE, type: "agent" }, sessionId: `suite-v-${SFX}` }, {
     who: { type: "agent", id: PROBE, version: "v1" },
     context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
     object: { type: "suite", id: `v-${SFX}` },
     decision: { action, params: {}, after: {}, basis: ["V 域探针"] },
-    rule_impact: [],
+    rule_impact: ruleImpact,
   })).eventId;
   const probeState = async () => (await deriveFloor(app, scope, scene)).find((x) => x.presetKey === PROBE);
 
@@ -2983,7 +3062,7 @@ h2("onboarding 经营主体写入 + 启用真实模式（横幅熄灭）→ 复�
 
   VC("floor 派生：近窗熔断事件 → blocked（优先级高于 celebrating）", async () => {
     await ensureProbe();
-    await probeEvent("pricing.adjust.blocked");
+    await probeEvent("suite.v_blocked", [{ rule_id: "R2", version: "v1", name: "保底价熔断", level: "block", result: "blocked" }]);
     const me = (await probeState())!;
     eq(me.state, "blocked", "熔断→blocked 压过庆祝");
   });
@@ -3007,6 +3086,78 @@ h2("onboarding 经营主体写入 + 启用真实模式（横幅熄灭）→ 复�
       if (a.stationId) assert(ids.has(a.stationId), `${a.name} 工位 ${a.stationId} 在场景内`);
     }
     await qApp(`DELETE FROM agents WHERE id=$1`, [`agt-${PROBE}`]); // 收尾清理探针
+  });
+}
+
+/* ================= W 域 · 大版本融合回归（D26：theater×floor×onboarding×P21×LLM 全链） ================= */
+{
+  const WC = C("W");
+  const { buildFloor, deriveFloor, defaultOfficeScene } = await import("@workloom/base/captain");
+  const WPROBE = `w-probe-${SFX}`;
+  const ensureWProbe = () => qApp(
+    `INSERT INTO agents (id, workspace_id, preset_key, name, version, kind, readonly, fence_bindings, skills, status)
+     VALUES ($1,$2,$3,'融合探针','v1','specialist',false,'[]','[]','ready') ON CONFLICT (id) DO NOTHING`,
+    [`agt-${WPROBE}`, scope.workspaceId, WPROBE],
+  );
+  const wEvent = async (action: string, ruleImpact: Array<Record<string, unknown>> = []) => (await gatewayAppend(gw, { ...scope, actor: { id: WPROBE, type: "agent" }, sessionId: `suite-w-${SFX}` }, {
+    who: { type: "agent", id: WPROBE, version: "v1" },
+    context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
+    object: { type: "suite", id: `w-${SFX}` },
+    decision: { action, params: {}, after: {}, basis: ["W 域融合探针"] },
+    rule_impact: ruleImpact,
+  })).eventId;
+  const wState = async () => (await deriveFloor(app, scope, defaultOfficeScene())).find((x) => x.presetKey === WPROBE);
+
+  WC("theater×floor 一致性：floor 覆盖全部 ready 员工且工位齐备", async () => {
+    const ready = await qApp<{ n: string }>(`SELECT count(*)::text AS n FROM agents WHERE workspace_id=$1 AND status='ready'`, [scope.workspaceId]);
+    const floor = await buildFloor(app, scope, "hotel");
+    const readyInFloor = floor.agents.filter((a) => a.state !== "disabled");
+    eq(readyInFloor.length, Number(ready.rows[0]!.n), "ready 员工全覆盖");
+    for (const a of readyInFloor) assert(a.stationId, `${a.name} 有工位`);
+    eq(floor.scene.id, "hotel-lobby", "行业场景包命中（im 种子 industry=hotel）");
+  });
+
+  WC("请示全链融合：举手 → 裁决 → 回位（事件留痕）", async () => {
+    await ensureWProbe();
+    const eventId = await wEvent("suite.w_reviewable");
+    const approvalId = `apr-w-${SFX}`;
+    await qApp(
+      `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, tier)
+       VALUES ($1,$2,$3,$4,'inapp','pending','{}','l4_chairman')`,
+      [approvalId, scope.tenantId, scope.workspaceId, eventId],
+    );
+    try {
+      const asking = (await wState())!;
+      eq(asking.state, "asking", "挂起即举手");
+      eq(asking.approvalId, approvalId, "approvalId 上桌");
+      await decide(app, gw, scope, boss, approvalId, { type: "approve" });
+      const after = (await wState())!;
+      assert(after.state !== "asking", "裁决后回位（不再举手）");
+      const g = await qApp<{ n: string }>(`SELECT count(*)::text AS n FROM biz_events WHERE workspace_id=$1 AND payload->'decision'->>'action'='approval.gesture'`, [scope.workspaceId]);
+      assert(Number(g.rows[0]!.n) >= 1, "手势留痕");
+    } finally {
+      await qApp(`UPDATE approvals SET status='approved' WHERE approval_id=$1 AND status='pending'`, [approvalId]);
+    }
+  });
+
+  WC("熔断真实形态融合（审计#1 修复）：rule_impact result=blocked → 员工踱步", async () => {
+    await ensureWProbe();
+    await wEvent("suite.w_blocked", [{ rule_id: "R2", version: "v1", name: "保底价熔断", level: "block", result: "blocked" }]);
+    const me = (await wState())!;
+    eq(me.state, "blocked", "rule_impact 熔断→blocked（不再依赖不存在的 action 命名）");
+  });
+
+  WC("庆祝真实形态融合（审计#2 修复）：夜班包交付/线程完成 → 庆祝", async () => {
+    await ensureWProbe();
+    await wEvent("night.package.deliver");
+    const me = (await wState())!;
+    assert(me.state === "celebrating" || me.state === "blocked", `夜班包→celebrating（实际 ${me.state}，可能被前序熔断窗压住）`);
+    // 线程完成通道（agent_id 归属）
+    const tid = `T-w-${SFX}`;
+    await qApp(`INSERT INTO threads (id, tenant_id, workspace_id, title, mode, status, created_by, agent_id, closed_at) VALUES ($1,$2,$3,'w 完成','quest','completed','MEM-001',$4,now())`, [tid, scope.tenantId, scope.workspaceId, `agt-${WPROBE}`]);
+    const me2 = (await wState())!;
+    assert(me2.state === "celebrating" || me2.state === "blocked", `线程完成→celebrating（实际 ${me2.state}）`);
+    await qApp(`DELETE FROM agents WHERE id=$1`, [`agt-${WPROBE}`]);
   });
 }
 

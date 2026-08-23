@@ -1,10 +1,10 @@
 {
   "name": "@workloom/hotel",
-  "version": "3.2.0",
+  "version": "1.0.0",
   "workloom": {
     "industry": "hotel",
-    "displayName": "WorkLoom 酒店行业版",
-    "description": "酒店行业版差异资产包 v2.1：11 个 Agent preset（+语音前台 phone-agent/业主驾驶舱 owner-cockpit）+ 基线围栏包 R1–R20（v3：+倒挂/超售/差评SLA/布草损耗）+ 三类客群客户级 Patch 模板+ 20 类对象/16 阶段枚举 + 一店一档五类档案 20 字段组（+布草/断点/FAQ）+ 25 个官方技能套件（+phone-concierge/overbooking-parity-guard/incident-postmortem），覆盖七大业务域 67 个经营环节（低星单体酒店/民宿/无人酒店，segment-defaults 三客群默认安装清单）",
+    "displayName": "WorkLoom for Hotels · 未来前台（演示 Bundle）",
+    "description": "酒店版行业差异资产包：7 个 Agent preset + 基线围栏包 + 对象/阶段枚举 + 一店一档 Schema + 官方技能套件（PRD V2.5 §2.2/§2.3）",
     "provides": {
       "presets": [
         "presets/pricing-agent.yml",
@@ -13,56 +13,20 @@
         "presets/inspection-agent.yml",
         "presets/content-agent.yml",
         "presets/competitor-agent.yml",
-        "presets/desktop-agent.yml",
-        "presets/frontdesk-agent.yml",
-        "presets/housekeeper-agent.yml",
-        "presets/phone-agent.yml",
-        "presets/owner-cockpit.yml"
+        "presets/desktop-agent.yml"
       ],
-      "fences": [
-        "fences/hotel-baseline.yml",
-        "fences/patches/low-star-single-patch.yml",
-        "fences/patches/homestay-patch.yml",
-        "fences/patches/unmanned-patch.yml"
-      ],
+      "fences": ["fences/hotel-baseline.yml"],
       "skills": [
         "skills/revenue-manager/SKILL.md",
         "skills/review-crisis/SKILL.md",
-        "skills/channel-reconciler/SKILL.md",
-        "skills/inspection-suite/SKILL.md",
-        "skills/night-audit-suite/SKILL.md",
-        "skills/checkin-checkout/SKILL.md",
-        "skills/customer-service/SKILL.md",
-        "skills/content-marketing/SKILL.md",
-        "skills/retention-manager/SKILL.md",
-        "skills/inventory-procurement/SKILL.md",
-        "skills/staff-scheduler/SKILL.md",
-        "skills/safety-compliance/SKILL.md",
-        "skills/finance-reporting/SKILL.md",
-        "skills/morning-briefing/SKILL.md",
-        "skills/handover-manager/SKILL.md",
-        "skills/pricing-matrix/SKILL.md",
-        "skills/review-asset-mining/SKILL.md",
-        "skills/room-service-dispatch/SKILL.md",
-        "skills/maintenance-dispatch/SKILL.md",
-        "skills/ai-live-assistant/SKILL.md",
-        "skills/ota-operations/SKILL.md",
-        "skills/guest-profile-crm/SKILL.md",
-        "skills/phone-concierge/SKILL.md",
-        "skills/overbooking-parity-guard/SKILL.md",
-        "skills/incident-postmortem/SKILL.md"
+        "skills/channel-reconciler/SKILL.md"
       ],
       "schemas": [
         "schemas/objects.json",
         "schemas/stages.json",
         "schemas/archive.schema.json"
       ],
-      "ui": [
-        "ui/cases.json"
-      ],
-      "segment_defaults": [
-        "segment-defaults.yml"
-      ]
+      "ui": ["ui/cases.json"]
     }
   }
 }

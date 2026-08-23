@@ -1,5 +1,6 @@
 /**
  * E1 · E2E 演示剧本（PRD V2.5「PF 页面交互流程图」六条流程实跑）
+ * ⚠️ 底座回归专用·酒店演示集，客户演示请用 seed-video.ts / demo-video.ts
  *
  * 用法：
  *   pnpm demo              —— 一键重置（整库重建+迁移+种子，生成「昨夜」数据）→ 实跑 PF.1–PF.6 → 断言汇总
@@ -309,7 +310,7 @@ async function main(): Promise<void> {
   );
   check(
     "22:00 围栏快照写入（F2.6：夜班动作 100% 过围栏 L4.1）",
-    curNight.configured && curNight.run?.fenceSnapshot === "hotel-baseline/v3",
+    curNight.configured && curNight.run?.fenceSnapshot === "hotel-baseline/v1",
     `快照 ${curNight.run?.fenceSnapshot}`,
   );
   nightStartedAt = nightStartedAt ?? curNight.run?.startedAt ?? null;

@@ -1,6 +1,6 @@
 {
   "$id": "workloom://bundles/hotel/schemas/objects",
-  "description": "酒店行业版事件 Object 类型枚举 v2（PRD V2.5 §2.2 槽② / 附录 E：对象枚举行业化）。五元事件 schema v1 冻结——仅允许枚举扩展，不得新增事件顶层字段。基线 8 类 + 任务三规划扩展 8 类 + v2 场景补全 4 类 = 20 类。",
+  "description": "酒店版事件 Object 类型枚举（PRD V2.5 §2.2 槽② / 附录 E：对象枚举行业化）",
   "objects": [
     { "type": "room_type", "label": "房型" },
     { "type": "room_price", "label": "房价" },
@@ -9,18 +9,6 @@
     { "type": "guest", "label": "客人" },
     { "type": "review", "label": "评价" },
     { "type": "store", "label": "门店" },
-    { "type": "staff", "label": "员工" },
-    { "type": "facility", "label": "设施设备" },
-    { "type": "inventory", "label": "布草耗材" },
-    { "type": "supplier", "label": "供应商" },
-    { "type": "task", "label": "工单任务" },
-    { "type": "invoice", "label": "发票账单" },
-    { "type": "campaign", "label": "营销活动" },
-    { "type": "member", "label": "会员" },
-    { "type": "alert", "label": "告警事件" },
-    { "type": "room", "label": "物理房态" },
-    { "type": "price_calendar", "label": "价格日历" },
-    { "type": "shift", "label": "班次交接" },
-    { "type": "phone_call", "label": "电话呼入" }
+    { "type": "staff", "label": "员工" }
   ]
 }

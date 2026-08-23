@@ -11,16 +11,6 @@ import P6 from "./pages/p6/P6";
 import P7 from "./pages/p7/P7";
 import P8 from "./pages/p8/P8";
 import P10 from "./pages/p10/P10";
-import P11 from "./pages/p11/P11";
-import P12 from "./pages/p12/P12";
-import P13 from "./pages/p13/P13";
-import P14 from "./pages/p14/P14";
-import P15 from "./pages/p15/P15";
-import P16 from "./pages/p16/P16";
-import P17 from "./pages/p17/P17";
-import P18 from "./pages/p18/P18";
-import P19 from "./pages/p19/P19";
-import P20 from "./pages/p20/P20";
 import DevMatrix from "./pages/dev/DevMatrix";
 import Onboarding from "./pages/onboarding/Onboarding";
 import { Bridge } from "./shell/Bridge";
@@ -43,16 +33,6 @@ export default function App() {
       <Route path="/p8" element={<P8 />} />
       <Route path="/p8/agent/:agentId" element={<P8 />} />
       <Route path="/p10" element={<P10 />} />
-      <Route path="/p11" element={<P11 />} />
-      <Route path="/p12" element={<P12 />} />
-      <Route path="/p13" element={<P13 />} />
-      <Route path="/p14" element={<P14 />} />
-      <Route path="/p15" element={<P15 />} />
-      <Route path="/p16" element={<P16 />} />
-      <Route path="/p17" element={<P17 />} />
-      <Route path="/p18" element={<P18 />} />
-      <Route path="/p19" element={<P19 />} />
-      <Route path="/p20" element={<P20 />} />
       <Route path="/onboarding" element={<Onboarding />} />
       <Route path="/dev" element={<Bridge><DevMatrix /></Bridge>} />
       <Route path="*" element={<P0 />} />

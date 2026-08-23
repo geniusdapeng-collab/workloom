@@ -123,6 +123,26 @@ HyperReality 的 **WorkData 数据底座**把素材管理变成了一等公民�
 
 ---
 
+## 五·六、双域融合：短视频社媒营销 × GEO（NEW · v3.0）
+
+AI 搜索月活破 8.2 亿、AI 问答流量占比首超传统搜索——你的客户越来越多地先问 AI，再决定买谁。**GEO（生成式引擎优化）就是让 AI 替你说话的生意**。WorkLoom GEO 把 GEO 与短视频社媒营销装进同一个经营系统：两个经营域共享**一个情报站、一条内容生产线、一套分发基建、一张战报、一条私域转化链路**。
+
+| 协同机制 | 一句话 |
+|---|---|
+| **选题情报双向流动** | 情报站每日统一情报卡（来源域：热榜/评论/AI问答），双用选题优先排产——一条 AI 高频问题，同时产出短视频和 GEO 图文 |
+| **内容一次生产、两处变现** | 脚本成套包固定字段「AI 答案适配版」：人审通过后 GEO 改写自动触发（六段式：问题前置→直接答案→参数表格→清单建议→实体锚点→信源引用），零边际成本，双审不省 |
+| **分发渠道统一编排** | publish-rpa 分两组：社媒组（抖音/TikTok/小红书/YouTube/Meta）+ 信源组（知乎/头条号/百家号/公众号/新闻稿/垂媒/百科），同一套模拟人工纪律 |
+| **全网存在感战报** | 固定三栏：社媒侧（播放/涨粉/互动/询盘）/ GEO 侧（提及率/首推率/SOV/引用源变化）/ 交叉侧（双入口询盘对比）——这份战报本身就是续约工具 |
+| **询盘双入口进同一私域** | 社媒私信 vs AI 搜索→官网→WhatsApp，全部来源打标进同一私域；月度双入口漏斗对比是 GEO 价值最硬的去伪存真证据 |
+
+**GEO 不是灰帽**。三条新增围栏焊死底线：G-GEO1（GEO 内容外发必审）、G-GEO2（事实红线一票否决——品牌实体信息与实体卡逐字一致）、G-GEO3（语料污染/伪造多源/机器刷量熔断）。我们承诺「可测量可追溯」，不承诺「保证上榜」——每个能见度数据都有原始答案截图存证，每个 AI 决策都进回测账本，**敢拿命中率接效果对赌**。
+
+双域班组 **14 员 + 2 指挥官**：情报组（调研员/引用源分析师）、内容组（脚本师/生产编排员/GEO 内容策划/实体一致性管理员）、分发组（发布专员/信源分发专员/投放优化师）、数据组（数据看板官/AI 能见度监测官/复盘分析师）、经营组（客户成功专员/私域承接专员），指挥层公司CEO 管客户、集团CEO 管全盘。北极星指标只有一个：**双入口有效询盘数（月）**。
+
+> 完整排产文档（90 天逐周计划/三层客户画像/一客一档 v2 七模块/定价模型）：[社媒短视频营销 × GEO 融合经营系统落地执行方案](docs/geo-fusion-plan.md)。代码全部在 [`bundles/geo-growth/`](bundles/geo-growth/)——**底座零改动，一切能力经 Bundle 注入**。
+
+---
+
 ## 六、技术领先性（只讲关键的）
 
 | 能力 | 一句话 |
@@ -138,15 +158,18 @@ HyperReality 的 **WorkData 数据底座**把素材管理变成了一等公民�
 ## 七、快速开始
 
 ```bash
-git clone https://github.com/geniusdapeng-collab/hyperreality-system.git
-cd hyperreality-system
+git clone https://github.com/geniusdapeng-collab/workloom.git
+cd workloom
 corepack enable && pnpm install && cp .env.example .env
-pnpm db:migrate && pnpm db:seed:video   # 需要 PostgreSQL 17 + pgvector
-pnpm dev                                # server :8787 / web :5173
+pnpm db:migrate
+pnpm db:seed:video   # AI 视频制作经营演示（ws-video 工作区）
+pnpm db:seed:geo     # 社媒×GEO 双域经营演示（ws-geo 工作区）
+pnpm dev             # server :8787 / web :5173（需要 PostgreSQL 17 + pgvector）
 ```
 
 ## 八、文档
 
+- [社媒短视频营销 × GEO 融合经营系统落地执行方案（v3.0 双域版）](docs/geo-fusion-plan.md)
 - [SuperMickey 全量拆解台账](docs/supermickey-decomposition-map.md)
 - [融合设计（25 员工 / 10 审批门 / 管线 / 数据模型）](docs/fusion-design.md)
 - [原底座文档（WorkLoom）](docs/workloom-base-README.md)

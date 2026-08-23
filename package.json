@@ -24,7 +24,8 @@
     "test": "pnpm -r --if-present test",
     "db:verify-chain": "tsx --env-file=.env scripts/verify-chain.ts",
     "suite": "TOOL_UNVERIFIED_RATE=0 tsx --env-file=.env scripts/suite.ts",
-    "db:seed:video": "tsx --env-file=.env scripts/seed-video.ts"
+    "db:seed:video": "tsx --env-file=.env scripts/seed-video.ts",
+    "db:seed:geo": "tsx --env-file=.env scripts/seed-geo.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -39,5 +40,5 @@
     "vitest": "^3.2.0",
     "yaml": "2.9.0"
   },
-  "description": "视频经理 · AI视频制作智能经营系统（SuperMickey 制作能力 × WorkLoom 人机协作底座）"
+  "description": "WorkLoom GEO 项目 · 社媒短视频营销 × GEO 双域融合经营系统（AI 视频制作智能经营底座 + GEO 生成式引擎优化双引擎）"
 }

@@ -1,0 +1,50 @@
+{
+  "name": "@workloom/geo-growth",
+  "version": "1.0.0",
+  "workloom": {
+    "industry": "geo-growth",
+    "displayName": "WorkLoom GEO · 社媒短视频营销 × GEO 双域融合经营系统",
+    "description": "社媒×GEO 双域经营差异资产包（融合方案 v1.0）：16 个数码员工 preset（情报组 2 + 内容组 4 + 分发组 3 + 数据组 3 + 经营组 2 + 指挥层 2）+ 双域基线围栏包（G9/G10/G12/G15/G16 社媒域 + G-GEO1/2/3 GEO 域 + G17/G18/G20 双域共 16 条）+ 4 条 Quest 主干管线 + 双域对象/阶段枚举 + 一客一档 v2 Schema + 6 个 GEO 官方技能套件。底座零改动，一切能力经 Bundle 注入。",
+    "provides": {
+      "presets": [
+        "presets/geo-researcher.yml",
+        "presets/citation-analyst.yml",
+        "presets/scriptwriter.yml",
+        "presets/production-planner.yml",
+        "presets/geo-content-planner.yml",
+        "presets/entity-inspector.yml",
+        "presets/publish-operator.yml",
+        "presets/source-distributor.yml",
+        "presets/ads-optimizer.yml",
+        "presets/data-board-officer.yml",
+        "presets/visibility-watcher.yml",
+        "presets/review-analyst.yml",
+        "presets/customer-success.yml",
+        "presets/private-domain-operator.yml",
+        "presets/company-ceo.yml",
+        "presets/group-ceo.yml"
+      ],
+      "fences": ["fences/geo-growth-baseline.yml"],
+      "skills": [
+        "skills/geo-query-craft/SKILL.md",
+        "skills/ai-answer-rewrite/SKILL.md",
+        "skills/visibility-monitor/SKILL.md",
+        "skills/citation-reverse/SKILL.md",
+        "skills/entity-consistency-check/SKILL.md",
+        "skills/dual-entry-inquiry/SKILL.md"
+      ],
+      "schemas": [
+        "schemas/objects.json",
+        "schemas/stages.json",
+        "schemas/archive.schema.json"
+      ],
+      "pipelines": [
+        "pipelines/intel-fusion.yml",
+        "pipelines/dual-content-factory.yml",
+        "pipelines/visibility-watch.yml",
+        "pipelines/ops-rhythm.yml"
+      ],
+      "ui": ["ui/cases.json"]
+    }
+  }
+}

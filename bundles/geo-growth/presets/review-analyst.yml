@@ -7,7 +7,7 @@ description: 周/月复盘：社媒表现 × GEO 能见度 × 询盘三方关联
 readonly: false
 night_shift: false
 high_risk: false
-fence_bindings: []
+fence_bindings: [G18]       # 熔断通知+快照留痕
 skills:
   - dual-entry-inquiry
 tools:

@@ -173,7 +173,19 @@ function clientArchive(): Record<string, unknown> {
         { q: "小批量钣金加工找什么设备", type: "scene", lang: "zh", priority: "P2", status: "未覆盖" },
         { q: "锐科 vs 竞对A 哪个好", type: "compare", lang: "zh", priority: "P1", status: "负面偏差" },
       ],
-      visibility_baseline: { mention_rate: 0.08, first_rate: 0.0, sov: 0.05, platforms: ["doubao", "deepseek", "yuanbao", "chatgpt"], captured_at: new Date().toISOString() },
+      visibility_baseline: {
+        mention_rate: 0.11, first_rate: 0.02, sov: 0.06,
+        platforms: ["doubao", "deepseek", "yuanbao", "chatgpt"],
+        by_platform: {
+          doubao: { mention: 0.17, first: 0.04, sov: 0.09 },
+          deepseek: { mention: 0.12, first: 0.02, sov: 0.07 },
+          yuanbao: { mention: 0.08, first: 0.0, sov: 0.04 },
+          chatgpt: { mention: 0.06, first: 0.01, sov: 0.03 },
+        },
+        trend_7d: [0.08, 0.08, 0.09, 0.09, 0.10, 0.10, 0.11],
+        competitor_a: { mention: 0.34, first: 0.19, sov: 0.28 },
+        captured_at: new Date().toISOString(),
+      },
       citation_sources: [
         { platform: "zhihu", status: "待建", note: "品类词答案高频引用源" },
         { platform: "baijiahao", status: "待建", note: "新闻稿分发占位" },
@@ -183,7 +195,17 @@ function clientArchive(): Record<string, unknown> {
       ],
     },
     // 模块⑦转化资产（数据红线：客资明细留客户系统，此处仅存画像与阶段聚合）
-    conversion_assets: { inquiry_total: 3, by_entry: { social: 2, ai_search: 1 }, note: "客资明细不出客户系统边界" },
+    conversion_assets: {
+      inquiry_total: 37, by_entry: { social: 24, ai_search: 13 },
+      note: "客资明细不出客户系统边界（此处仅存画像与阶段聚合，红线 R4）",
+      month_trend: [9, 14, 21, 28, 37],
+      samples: [
+        { who: "Hans Weber · 德国五金进口商（汉堡）", entry: "ai_search", stage: "报价谈判", quality: "A", source_path: "Perplexity「CE certified laser cutter China」→ 官网落地页 → WhatsApp", note: "要 3 台 RK-3000W，对比竞对 A 中；AI 答案首推我方的首周即进线" },
+        { who: "Mike Torres · 美国金属加工厂主（俄亥俄）", entry: "social", stage: "已成交", quality: "A", source_path: "TikTok 选型口播 → 私信 → WhatsApp", note: "RK-1500W ×1，到仓安装完成，复购意向切割头耗材" },
+        { who: "Anna Kowalski · 波兰家具设备采购（波兹南）", entry: "ai_search", stage: "需求确认", quality: "B", source_path: "ChatGPT「best fiber laser for small workshop」→ 知乎英文回答 → 表单", note: "预算敏感，要 CE 与售后 SLA 明细" },
+        { who: "Carlos Mendez · 墨西哥钣金代工（蒙特雷）", entry: "social", stage: "画像清洗", quality: "B", source_path: "YouTube 实测视频 → 落地页表单", note: "西语客户，已转私域承接专员跟进" },
+      ],
+    },
     // 数字CEO 宪章（深度授权六步：shadow 影子模式 3 天 → 试用 7 天）
     charter: {
       version: 2,
@@ -414,7 +436,7 @@ async function main() {
      ON CONFLICT (id) DO NOTHING`,
     [
       `nr-geo-${runDate}`, WS_ID, runDate, FENCE_VERSION,
-      JSON.stringify({ done: 11, pending: 2, alerts: 1, note: "能见度采集 24 query（品牌词 6+品类词 12+竞品词 6）/ 评论分流 31 条 / 实体巡检发现 1 处口径冲突 / 清晨决策包已生成" }),
+      JSON.stringify({ done: 11, pending: 2, alerts: 1, note: "【社媒侧】TikTok 播放 2.1w（周末峰 ▲31%）/ 涨粉 +214 / 询盘 4 条；【GEO 侧】24 query 采集（品牌词提及 4/6 ▲2，品类词首推破零 1 条，SOV 6% ▲1pt）/ 引用源新增知乎收录 1；【交叉侧】双入口询盘 4 条（社媒 2 / AI 搜索 2，含德国 Hans 报价谈判推进）；评论分流 31 条（自动 27 / 待审 3 / 告警 1）/ 实体巡检发现百科功率口径冲突 1 处（修复计划已立项）" }),
       new Date(yesterday.setHours(22, 0, 0, 0)).toISOString(),
     ],
   );
@@ -422,11 +444,16 @@ async function main() {
 
   // —— 账号指标时序（近 7 天 × 2 社媒账号） ——
   const metricRows: unknown[][] = [];
+  // 真实感曲线（买单人视角）：非整数、有周末波峰、有日际抖动；伪随机种子固定保证复跑一致
+  const jitter = (seed: number) => { const x = Math.sin(seed * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
   for (let d = 7; d >= 1; d--) {
     const day = new Date(); day.setDate(day.getDate() - d); day.setHours(20, 0, 0, 0);
-    const base = 8600 + (7 - d) * 1900;
-    metricRows.push([WS_ID, "tiktok", "@RuikeLaser", null, day.toISOString(), base, Math.round(base * 0.042), Math.round(base * 0.018), Math.round(base * 0.011), 2 + (7 - d)]);
-    metricRows.push([WS_ID, "youtube", "@RuikeLaserOfficial", null, day.toISOString(), Math.round(base * 0.35), Math.round(base * 0.028), Math.round(base * 0.009), Math.round(base * 0.014), 1 + (7 - d)]);
+    const dow = day.getDay();
+    const weekend = dow === 0 || dow === 6 ? 1.31 : 1.0;
+    const base = Math.round((7980 + (7 - d) * 2137) * weekend * (0.88 + jitter(d * 7 + 1) * 0.27));
+    metricRows.push([WS_ID, "tiktok", "@RuikeLaser", null, day.toISOString(), base, Math.round(base * (0.038 + jitter(d * 7 + 2) * 0.011)), Math.round(base * (0.015 + jitter(d * 7 + 3) * 0.006)), Math.round(base * (0.009 + jitter(d * 7 + 4) * 0.004)), Math.round(1 + (7 - d) * 0.9 + jitter(d * 7 + 5) * 3)]);
+    const yb = Math.round(base * (0.31 + jitter(d * 7 + 6) * 0.09));
+    metricRows.push([WS_ID, "youtube", "@RuikeLaserOfficial", null, day.toISOString(), yb, Math.round(yb * 0.026), Math.round(yb * 0.008), Math.round(yb * 0.013), Math.round((1 + (7 - d) * 0.5) * (0.8 + jitter(d * 7 + 7) * 0.5))]);
   }
   for (const m of metricRows) {
     await q(
@@ -440,9 +467,15 @@ async function main() {
 
   // —— 评论样本（夸赞自动回/咨询待审/负面告警） ——
   const cmts = [
-    ...Array.from({ length: 6 }, (_, i) => ({ id: `cm-g-p${i}`, intent: "praise", body: ["切割精度确实可以", "这个价位很能打了", "售后响应真的快"][i % 3], auto: true })),
-    { id: "cm-g-q1", intent: "query", body: "1500W 切 6mm 碳钢速度多少？", auto: false },
-    { id: "cm-g-c1", intent: "crisis", body: "到港设备有运输磕碰，怎么处理？？", auto: false },
+    ...Array.from({ length: 6 }, (_, i) => ({ id: `cm-g-p${i}`, intent: "praise", body: [
+      "Ordered the RK-1500W in March — cutting tolerance is genuinely ±0.03mm. Impressed.",
+      "This price point for a 1500W fiber laser is unbeatable. Our shop in Ohio loves it.",
+      "Remote support answered at 2am China time within 20 min. Respect.",
+      "Second machine ordered for our Poland facility. CE docs were complete, customs smooth.",
+      "The cutting demo video is exactly what the machine does. No exaggeration. Rare.",
+      "Switched from a German brand — same cut quality, 40% cheaper. No regrets."][i % 6], auto: true })),
+    { id: "cm-g-q1", intent: "query", body: "What's the actual cutting speed of the 1500W on 6mm carbon steel? Need real numbers for our production plan.", auto: false },
+    { id: "cm-g-c1", intent: "crisis", body: "Machine arrived with a dented frame at the port of Hamburg. Need resolution ASAP!!", auto: false },
   ];
   for (const [i, c] of cmts.entries()) {
     await q(
@@ -458,7 +491,7 @@ async function main() {
     if (c.auto) {
       await q(
         `INSERT INTO comment_replies (id, workspace_id, comment_id, text, channel, status, receipt, created_by, created_at)
-         VALUES ($1,$2,$3,'Thanks! DM us for the full spec sheet.','auto','sent','{"delivered":true}','agt-geo-private-domain-operator',$4) ON CONFLICT (id) DO NOTHING`,
+         VALUES ($1,$2,$3,'Thanks! Full spec sheet & test report in DM.','auto','sent','{"delivered":true}','agt-geo-private-domain-operator',$4) ON CONFLICT (id) DO NOTHING`,
         [`cr-${c.id}`, WS_ID, c.id, new Date(Date.now() - i * 53 * 60000 + 300000).toISOString()],
       );
     }

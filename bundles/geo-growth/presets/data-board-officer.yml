@@ -7,7 +7,7 @@ description: 社媒指标采集落账、阈值告警、晨报数据栏（社媒�
 readonly: false
 night_shift: true
 high_risk: false
-fence_bindings: []
+fence_bindings: [G18]       # 熔断通知+快照留痕
 skills: []
 tools:
   - { name: metrics.collect, access: read, desc: 定时采集账号/视频指标（播放/涨粉/互动/询盘） }

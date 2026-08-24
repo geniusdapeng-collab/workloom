@@ -7,7 +7,7 @@ description: 热榜/竞品/评论语义/AI 问答 query 采集，每日产出统
 readonly: false
 night_shift: false
 high_risk: false
-fence_bindings: []
+fence_bindings: [G-GEO2]       # 情报事实口径红线
 skills:
   - geo-query-craft
 tools:

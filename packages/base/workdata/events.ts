@@ -93,7 +93,15 @@ export async function appendEventInTx(
       `SELECT seq, hash FROM biz_events WHERE tenant_id = $1 ORDER BY seq DESC LIMIT 1`,
       [scope.tenantId],
     );
-    const nextSeq = BigInt(tail.rows[0]?.seq ?? 8800) + 1n;
+    // 号源纪律（D28 修复）：event_id 从「全库事件号最大值」单调分配，而非 max(seq)+1——
+    // 种子用人工号段（video 6600/hotel 8800/geo 9900）写入「高号低 seq」事件，
+    // 若按 seq 分配，新号会反复撞进种子号段被幂等静默吞掉（D27 大面积测试失败的根因）
+    const idTail = await client.query<{ n: string | null }>(
+      `SELECT max((regexp_replace(event_id, '^E-', ''))::bigint)::text AS n
+       FROM biz_events WHERE tenant_id = $1 AND event_id ~ '^E-[0-9]+$'`,
+      [scope.tenantId],
+    );
+    const nextSeq = BigInt(idTail.rows[0]?.n ?? tail.rows[0]?.seq ?? 8800) + 1n;
     const prevHash = tail.rows[0]?.hash ?? GENESIS_HASH;
     const eventId = formatEventId(nextSeq);
 

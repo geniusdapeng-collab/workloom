@@ -7,7 +7,7 @@ description: query 集多平台定期采集、答案结构化、提及率/首推
 readonly: false
 night_shift: true
 high_risk: false
-fence_bindings: []
+fence_bindings: [G-GEO3]       # 灰帽只识别不使用
 skills:
   - visibility-monitor
 tools:

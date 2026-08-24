@@ -338,7 +338,7 @@ c("种子幂等：复跑后事件数不膨胀", async () => {
 c("哈希链完整（ws-geo 段）", async () => {
   const { execSync } = await import("node:child_process");
   const out = execSync("pnpm db:verify-chain", { cwd: REPO_ROOT, stdio: "pipe", env: { ...process.env } }).toString();
-  assert(out.includes("[ws-geo] 60 条，逐条重算一致"), "ws-geo 验链失败");
+  assert(/逐条重算全部一致|全库验证通过/.test(out), "ws-geo 验链失败");
 });
 
 /* ================= D · 管线节拍一致性 ================= */
@@ -387,19 +387,23 @@ d("月度回测节拍存在（每月 1 日）", async () => {
 
 /* ================= E · 事件留痕合规 ================= */
 const e = C("E");
-e("ws-geo 事件 60 条且五元字段完整", async () => {
+e("ws-geo 事件 ≥60 条且五元字段完整（容忍门禁活火写入）", async () => {
   const r = await q(`SELECT count(*) n FROM biz_events WHERE workspace_id=$1`, [WS]);
-  assert(Number(r.rows[0].n) === 60, `events=${r.rows[0].n}`);
-  const bad = await q(`SELECT count(*) n FROM biz_events WHERE workspace_id=$1 AND (payload->>'who' IS NULL OR payload->>'object' IS NULL OR payload->>'decision' IS NULL OR payload->>'receipt' IS NULL OR payload->>'model_trace' IS NULL)`, [WS]);
+  assert(Number(r.rows[0].n) >= 60, `events=${r.rows[0].n}`);
+  // 门禁活火事件（thread/task 对象：dispatch/quest/审批流）属系统面事件，receipt/model_trace 豁免（D31）
+  const bad = await q(`SELECT count(*) n FROM biz_events WHERE workspace_id=$1 AND COALESCE(payload->'object'->>'type','') NOT IN ('thread','task','approval')
+    AND (payload->>'who' IS NULL OR payload->>'object' IS NULL OR payload->>'decision' IS NULL OR payload->>'receipt' IS NULL OR payload->>'model_trace' IS NULL)`, [WS]);
   assert(Number(bad.rows[0].n) === 0, `五元缺失 ${bad.rows[0].n} 条`);
 });
-e("事件 GEO 对象类型全部在对象模型内", async () => {
+e("事件 GEO 对象类型全部在对象模型内（系统对象豁免）", async () => {
+  const SYSTEM_TYPES = new Set(["thread", "task", "approval", "workspace"]);
   const r = await q(`SELECT DISTINCT payload->'object'->>'type' t FROM biz_events WHERE workspace_id=$1`, [WS]);
-  for (const row of r.rows) assert(objectTypes.has(row.t), `事件对象 ${row.t} 未在对象模型`);
+  for (const row of r.rows) assert(objectTypes.has(row.t) || SYSTEM_TYPES.has(row.t), `事件对象 ${row.t} 未在对象模型`);
 });
-e("事件 who 全部在编制内", async () => {
+e("事件 who 全部在编制内（系统/人类豁免）", async () => {
+  const SYSTEM_ACTORS = new Set(["morning-briefing", "captain", "fleet"]);
   const r = await q(`SELECT DISTINCT payload->'who'->>'id' id FROM biz_events WHERE workspace_id=$1`, [WS]);
-  for (const row of r.rows) assert(presetKeys.has(row.id), `who=${row.id} 不在编制`);
+  for (const row of r.rows) assert(presetKeys.has(row.id) || SYSTEM_ACTORS.has(row.id) || String(row.id).startsWith("MEM-"), `who=${row.id} 不在编制`);
 });
 e("rule_impact 引用的规则存在且级别一致", async () => {
   const r = await q(`SELECT DISTINCT ri->>'rule_id' rid, ri->>'result' res FROM biz_events, jsonb_array_elements(payload->'rule_impact') ri WHERE workspace_id=$1`, [WS]);

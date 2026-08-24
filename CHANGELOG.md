@@ -2,6 +2,24 @@
 
 本文件记录 WorkLoom IM 底座的变更历史。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 
+## [2.0.5] - 2026-08-24 · 发布门禁技能化（D31）：跨仓库底座同步 + workloom-release-gate 技能
+
+### 新增
+
+- **`skills/official/release-gate/SKILL.md`**：发布上线前三链路校验技能（触发即执行：识别 WorkLoom 底座仓库的发布意图 → 强制 suite + release:gate 全绿才放行）；含标准流程/环境适配/红线/缺陷档案/跨产品同步纪律。
+- **门禁工作区自适应**：release-gate 自动探测演示工作区（hyperreality 单区 / WorkLoom GEO 双区直接复用），探测为空判死。
+- **组织记忆升级**：mem-release-gate-* 三工作区 SOP 记忆同步技能锚点。
+
+### 跨仓库同步（hyperreality-system @ 9fc3b59）
+
+- 底座修复全量回灌：迁移 0015/0016 号源函数、fence DSL 扩展、装配器属地查验、内容域 QUEST 拆解+工具、17 员工围栏绑定、archive schema、夜班 ID 前缀、P3 审批卡、web 工作区可配置、release-gate 门禁与政策文档。
+- mock 测试补号源函数匹配 ×6（两库同步）。
+
+### 验证
+
+- hyperreality：suite 445/445（独立库）· base 单测 415 全绿 · typecheck 全绿 · release:gate 9/9 ✅
+- workloom：release:gate 12/12 ✅ · base 单测 415 全绿 ✅
+
 ## [2.0.4] - 2026-08-24 · 发布门禁（D30）：三链路校验清单固化 + 首跑即擒 4 个主链路缺陷
 
 ### 新增（发布红线制度化）

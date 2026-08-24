@@ -2,6 +2,26 @@
 
 本文件记录 WorkLoom IM 底座的变更历史。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 
+## [2.0.3] - 2026-08-24 · 号源根因终修（D29）：RLS 遮蔽的全租户事件号分配 + service-c 合并树全绿
+
+### 背景
+
+合并 service-c（f460718：AI 服务前台四包 + apps/webc 第三端 + 迁移 0012-0014）后，套件在全新库上确定性失败（R-05~R-21 captain 节拍事件全灭）。三连排查定位真根因。
+
+### 修复（P0·数据底座）
+
+- **事件号源被 RLS 遮蔽（真根因）**：D28 的号源修复（max(event_id) 单调分配）在 RLS 上下文内执行，只能看到当前工作区事件——各工作区"各自为政"分配，ws-yunqi 计数器冲进 ws-geo 种子号段（9901-9960）时 **60 条事件被 ON CONFLICT 幂等静默吞掉**（captain 节拍/审批/探针事件连环失踪）。
+- 落地：迁移 0015 新增 `biz_events_max_event_no(tenant_id)`（SECURITY DEFINER，属主身份绕 RLS 读全租户号尾，只暴露一个数字）；appendEventInTx 改调该函数。分配与约束（UNIQUE tenant+event_id）终同域。
+- 验证：全新库三连跑 445/445 ✅（此前首跑必挂 R 域），号源单调推进无吞事件。
+
+### 修复（合并树整合）
+
+- **P-15 前后端契约对账**：套件此前只解析 video 子路由，service-c 的 serviceRouter（kb/tickets/stats）被误判"悬空调用"——契约检查扩展 service 子模块解析。
+
+### 回归（合并树最终态）
+
+- suite 445/445 ×3 连跑 ✅ · suite:geo 77/77 ✅ · typecheck 全绿 ✅ · 验链 3897 事件一致 ✅
+
 ## [2.0.2] - 2026-08-24 · 三端走查（D28）：C 端前台建成 + 事件号源缺陷修复 + 数据饱满度升级
 
 ### 修复（A 级·演示根基）

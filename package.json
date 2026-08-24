@@ -26,7 +26,8 @@
     "suite": "TOOL_UNVERIFIED_RATE=0 tsx --env-file=.env scripts/suite.ts",
     "db:seed:video": "tsx --env-file=.env scripts/seed-video.ts",
     "db:seed:geo": "tsx --env-file=.env scripts/seed-geo.ts",
-    "suite:geo": "tsx --env-file=.env scripts/suite-geo.ts"
+    "suite:geo": "tsx --env-file=.env scripts/suite-geo.ts",
+    "release:gate": "tsx --env-file=.env scripts/release-gate.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

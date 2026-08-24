@@ -2,6 +2,25 @@
 
 本文件记录 WorkLoom IM 底座的变更历史。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 
+## [2.0.4] - 2026-08-24 · 发布门禁（D30）：三链路校验清单固化 + 首跑即擒 4 个主链路缺陷
+
+### 新增（发布红线制度化）
+
+- **`scripts/release-gate.ts` + `pnpm release:gate`**：发布前核心链路校验门禁（12 项）——ASK ×4（双工作区真实场景问答）/ QUEST ×2（目标拆解≥2步+事件留痕）/ 编排 ×3（触发器在位/节拍回调落账/全库验链）；任一失败 exit 1 = 禁止发布；启动打印环境口径（沙箱 mock / 线上真实端点）。
+- **`docs/release-checklist.md`**：校验清单政策文档（三链路要点/环境适配/红线/缺陷档案）。
+- **组织记忆固化**：`mem-release-gate-*` SOP 记忆写入三工作区（org_memory，confidence 0.95）。
+
+### 修复（门禁首跑擒获，皆为「ASK 故障历史教训」同族）
+
+- **线程/项目号跨工作区撞库（P0）**：T-###/VID-### 按本区最大值分配但主键全库唯一 + 正则 `\d` 不被 PG 支持（号段过滤恒空）——任一工作区第二次派遣即 duplicate key。迁移 0016 号源函数（threads_max_t_no/video_projects_max_vid_no，SECURITY DEFINER 全库最大值）+ `\d`→`[0-9]`。
+- **线程号 bigint 拼接爆炸（P0）**：pg 驱动 bigint 返回 string，`"133"+1` 字符串拼接 → T-133111111111111111（20 位溢出 bigint）。三处调用点 Number() 转换。
+- **内容域 QUEST 只拆 1 步（P1）**：planQuest 模板仅酒店域三场景——补内容生产链五步拆解（情报→脚本→人审→分发→回收，与 README §三承诺同口径）+ dispatch 注入 llmCall（线上真实模型规划）。
+- **内容域工具未注册（P1）**：演示面工具表仅酒店域——注册 intel.collect/script.draft/content.submit/publish.execute/metrics.collect 五个 L3 确定性剧本工具。
+
+### 回归
+
+- release:gate 12/12 ✅（QUEST 拆解 5 步→执行 3 步→G9 必审门正确挂起 pending_review）· suite 445/445 ✅（全新库）· suite:geo 77/77 ✅
+
 ## [2.0.3] - 2026-08-24 · 号源根因终修（D29）：RLS 遮蔽的全租户事件号分配 + service-c 合并树全绿
 
 ### 背景

@@ -6,6 +6,7 @@
  *  - G10 评论分流门 → 评论区运营（comment-operator）
  * 命中不了门时按动作前缀兜底；再兜底=事件发起方 who.id 原样展示
  */
+import { actionText } from "../../lib/display";
 
 export interface GateAgent {
   gate: string;
@@ -62,5 +63,6 @@ const ACTION_LABEL: Record<string, string> = {
 };
 
 export function actionLabel(action: string): string {
-  return ACTION_LABEL[action] ?? action;
+  // 已收编到展示字典层（lib/display）：先查本地表，再查字典，兜底人性化，不裸奔原始码
+  return ACTION_LABEL[action] ?? actionText(action);
 }

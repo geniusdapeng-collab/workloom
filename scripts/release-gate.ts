@@ -79,10 +79,30 @@ await check("G-00", "服务健康前置", async () => {
 });
 
 const tokens: Record<string, string> = {};
-const WS_LIST = [
-  { key: "video", slug: "video-studio", member: "MEM-V01", name: "AI 视频经营（ws-video）" },
-  { key: "geo", slug: "geo-growth", member: "MEM-G01", name: "社媒×GEO 双域（ws-geo）" },
+// 工作区自动探测（跨产品复用口径：hyperreality 无 ws-geo，WorkLoom GEO 有；存在才校验）
+const WS_CANDIDATES = [
+  { key: "video", slug: "video-studio", member: "MEM-V01", name: "AI 视频经营（ws-video）", wsId: "ws-video" },
+  { key: "geo", slug: "geo-growth", member: "MEM-G01", name: "社媒×GEO 双域（ws-geo）", wsId: "ws-geo" },
 ];
+const WS_LIST: typeof WS_CANDIDATES = [];
+{
+  const app = new pg.Client({ connectionString: APP_URL });
+  await app.connect();
+  try {
+    await app.query("SELECT set_config('app.tenant_id','tenant-demo',false)");
+    const r = await app.query(`SELECT slug FROM workspaces WHERE slug = ANY($1::text[])`, [WS_CANDIDATES.map((w) => w.slug)]);
+    const have = new Set(r.rows.map((x) => x.slug));
+    for (const w of WS_CANDIDATES) if (have.has(w.slug)) WS_LIST.push(w);
+    console.log(`工作区探测：${WS_LIST.map((w) => w.wsId).join(" / ") || "（无演示工作区）"}
+`);
+  } finally {
+    await app.end();
+  }
+}
+if (WS_LIST.length === 0) {
+  results.push({ id: "G-01", name: "工作区探测", ok: false, detail: "无任何演示工作区（请先播种 db:seed*）", ms: 0 });
+  console.log("✗ G-01 工作区探测 —— 无任何演示工作区（请先播种 db:seed*）");
+}
 for (const ws of WS_LIST) {
   await check("G-01", `身份签发 · ${ws.name}`, async () => {
     tokens[ws.key] = await login(ws.slug, ws.member);
@@ -91,12 +111,13 @@ for (const ws of WS_LIST) {
 }
 
 /* ---------- 链路一：ASK 问答模式 ---------- */
-const ASK_SCENARIOS: Array<{ ws: string; q: string }> = [
+const ASK_ALL: Array<{ ws: string; q: string }> = [
   { ws: "video", q: "昨天账号的数据怎么样？" },
   { ws: "video", q: "最近哪类选题完播率最高？" },
   { ws: "geo", q: "我们本周在 AI 搜索里的能见度如何？" },
   { ws: "geo", q: "竞品在品类词上的表现比我们好吗？" },
 ];
+const ASK_SCENARIOS = ASK_ALL.filter((sc) => WS_LIST.some((w) => w.key === sc.ws));
 for (const [i, sc] of ASK_SCENARIOS.entries()) {
   await check(`A-0${i + 1}`, `ASK · ${sc.q.slice(0, 18)}…`, async () => {
     const r = await call<{ kind: string; mode?: string; answer?: string; via?: string }>(
@@ -112,7 +133,7 @@ for (const [i, sc] of ASK_SCENARIOS.entries()) {
 /* ---------- 链路二：QUEST 任务模式 ---------- */
 await check("Q-01", "QUEST · 一句话目标自动拆解多步骤", async () => {
   const r = await call<{ kind: string; mode?: string; threadId?: string; status?: string; stepsTotal?: number; stepsDone?: number }>(
-    "threads.dispatch", tokens.video!,
+    "threads.dispatch", tokens[WS_LIST[0]!.key]!,
     { title: "给 RK-1500W 新品出 3 条小红书测评片，本周五前要", presetKey: "director", runImmediately: true },
     60000,
   );
@@ -120,7 +141,7 @@ await check("Q-01", "QUEST · 一句话目标自动拆解多步骤", async () =>
   assert(r.threadId, "未建线程");
   assert(typeof r.stepsTotal === "number" && r.stepsTotal >= 2, `未拆解多步骤（stepsTotal=${r.stepsTotal}）`);
   // 任务创建→拆解→执行流程完整：线程可查、进度在推进或已完成
-  const t = await call<{ id: string; status: string }>("threads.get", tokens.video!, { threadId: r.threadId }, 30000, "query");
+  const t = await call<{ id: string; status: string }>("threads.get", tokens[WS_LIST[0]!.key]!, { threadId: r.threadId }, 30000, "query");
   assert(t && t.id === r.threadId, "线程回读失败");
   return `拆解 ${r.stepsTotal} 步 · 已执行 ${r.stepsDone} 步 · 状态 ${r.status}`;
 });
@@ -130,10 +151,12 @@ await check("Q-02", "QUEST · 任务事件流留痕可回读", async () => {
   await app.connect();
   try {
     await app.query("SELECT set_config('app.tenant_id','tenant-demo',false)");
-    await app.query("SELECT set_config('app.workspace_id','ws-video',false)");
+    const wsId = WS_LIST[0]!.wsId;
+    await app.query("SELECT set_config('app.workspace_id',$1,false)", [wsId]);
     const r = await app.query(
       `SELECT count(DISTINCT session_id) tc, count(*) ec FROM biz_events
-       WHERE workspace_id='ws-video' AND session_id IS NOT NULL AND created_at > now() - interval '30 minutes'`,
+       WHERE workspace_id=$1 AND session_id IS NOT NULL AND created_at > now() - interval '30 minutes'`,
+      [wsId],
     );
     assert(Number(r.rows[0].tc) >= 1 && Number(r.rows[0].ec) >= 1, "无线程事件留痕");
     return `线程事件 ${r.rows[0].ec} 条`;
@@ -157,11 +180,13 @@ await check("T-01", "编排 · 触发器在位且启用（双工作区）", asyn
       await app.end();
     }
   };
-  const v = await countOf("ws-video");
-  const g = await countOf("ws-geo");
-  assert(v >= 3, `ws-video 触发器不足（${v}）`);
-  assert(g >= 3, `ws-geo 触发器不足（${g}）`);
-  return `ws-video ×${v} / ws-geo ×${g}`;
+  const parts: string[] = [];
+  for (const w of WS_LIST) {
+    const n = await countOf(w.wsId);
+    assert(n >= 3, `${w.wsId} 触发器不足（${n}）`);
+    parts.push(`${w.wsId} ×${n}`);
+  }
+  return parts.join(" / ");
 });
 await check("T-02", "编排 · 节拍执行→回调落痕（晨报触发全链）", async () => {
   const app = new pg.Client({ connectionString: APP_URL });
@@ -169,20 +194,22 @@ await check("T-02", "编排 · 节拍执行→回调落痕（晨报触发全链�
   let before = 0;
   try {
     await app.query("SELECT set_config('app.tenant_id','tenant-demo',false)");
-    await app.query("SELECT set_config('app.workspace_id','ws-geo',false)");
-    const b = await app.query(`SELECT count(*) n FROM biz_events WHERE workspace_id='ws-geo' AND payload->'decision'->>'action'='ceo.briefing'`);
+    const wsId = WS_LIST[0]!.wsId;
+    await app.query("SELECT set_config('app.workspace_id',$1,false)", [wsId]);
+    const b = await app.query(`SELECT count(*) n FROM biz_events WHERE workspace_id=$1 AND payload->'decision'->>'action'='ceo.briefing'`, [wsId]);
     before = Number(b.rows[0].n);
   } finally {
     await app.end();
   }
-  const r = await call<{ eventId?: string; skipped?: string }>("captain.runBeat", tokens.geo!, { beat: "daily" }, 60000);
+  const r = await call<{ eventId?: string; skipped?: string }>("captain.runBeat", tokens[WS_LIST[0]!.key]!, { beat: "daily" }, 60000);
   assert(r.eventId || !r.skipped, `节拍未执行（skipped=${r.skipped}）`);
   const app2 = new pg.Client({ connectionString: APP_URL });
   await app2.connect();
   try {
     await app2.query("SELECT set_config('app.tenant_id','tenant-demo',false)");
-    await app2.query("SELECT set_config('app.workspace_id','ws-geo',false)");
-    const a = await app2.query(`SELECT count(*) n FROM biz_events WHERE workspace_id='ws-geo' AND payload->'decision'->>'action'='ceo.briefing'`);
+    const wsId2 = WS_LIST[0]!.wsId;
+    await app2.query("SELECT set_config('app.workspace_id',$1,false)", [wsId2]);
+    const a = await app2.query(`SELECT count(*) n FROM biz_events WHERE workspace_id=$1 AND payload->'decision'->>'action'='ceo.briefing'`, [wsId2]);
     assert(Number(a.rows[0].n) === before + 1, `回调事件未落账（${before}→${a.rows[0].n}）`);
     return `触发→执行→回调落痕 +1（eventId=${r.eventId}）`;
   } finally {

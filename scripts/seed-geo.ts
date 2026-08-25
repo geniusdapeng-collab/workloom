@@ -19,7 +19,7 @@ import YAML from "yaml";
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { safeParseBusinessEvent } from "@workloom/shared";
+import { safeParseReplayAwareEvent } from "@workloom/base/workdata";
 // 哈希链统一生产口径（events.ts 的 canonicalJson/eventHash），与 seed.ts/seed-video.ts 同一纪律
 import { eventHash } from "@workloom/base/workdata";
 
@@ -528,7 +528,7 @@ async function main() {
   // seed.ts（hotel）8801-8900 / seed-video.ts 6601-6700 / seed-geo.ts 9901-9960
   const EVENT_BASE_G = 9900;
   const mkEvent = (i: number, time: Date) => {
-    const id = `E-${EVENT_BASE_G + i}`;
+    const id = `E-SEED-${EVENT_BASE_G + i}`;
     const scene = i % 10;
     const ctx = { tenant_id: TENANT_ID, workspace_id: WS_ID, time: time.toISOString(), stage: "stable", store: WS_NAME };
     const receipt = { synced: true, snapshot_uri: `data/snapshots/${id.toLowerCase()}.png`, verified_at: new Date(time.getTime() + 45000).toISOString() };
@@ -553,7 +553,7 @@ async function main() {
   let inserted = 0;
   for (let i = 1; i <= 60; i++) {
     const ev = mkEvent(i, times[i - 1] as Date);
-    const checked = safeParseBusinessEvent(ev);
+    const checked = safeParseReplayAwareEvent(ev);
     if (!checked.success) throw new Error(`种子事件 ${ev.event_id} 未过校验：${checked.error.message}`);
     const payload = JSON.stringify(checked.data);
     const hash = eventHash(prevHash, checked.data);
@@ -568,9 +568,9 @@ async function main() {
 
   // —— 待批请示（G-GEO1 外发 / G12 加投 / G20 品牌表态） ——
   const approvalsSeed = [
-    { aid: "apr-g-001", eid: `E-${EVENT_BASE_G + 11}`, tier: "l2_captain", title: "GEO 内容外发知乎", snapshot: { title: "「激光切割机怎么选」AI 答案版外发知乎", action: "geo.publish", params: { platform: "zhihu", format: "六段式", word_count: 1450 }, gate: "G-GEO1", ceo_rationale: "G-GEO2 事实红线校验已通过（实体锚点与实体卡逐字一致），品类词 P1 优先级，建议批准。", contentMd: "# GEO 外发请示\n\n六段式齐全，信源引用 3 处，实体锚点比对 12/12 一致。" } },
-    { aid: "apr-g-002", eid: `E-${EVENT_BASE_G + 21}`, tier: "l4_chairman", title: "Meta 加投 $500", snapshot: { title: "Meta 加投 $500 · 需要你拍板", action: "ads.boost", params: { campaign: "选型指南口播", amount: 500, window: "72h" }, gate: "G12", ceo_rationale: "素材正处爬升期（CTR 3.8%→5.1%），加投 ROI 预估 1:2.8；但涉预算，请您定。" } },
-    { aid: "apr-g-003", eid: `E-${EVENT_BASE_G + 31}`, tier: "l4_chairman", title: "品牌表态回应（强制 L4）", snapshot: { title: "「锐科 vs 竞对A」AI 答案负面偏差回应 · 强制 L4", action: "content.submit", params: { involves_brand_stance: true, topic: "对比词负面偏差澄清" }, gate: "G20", ceo_rationale: "能见度监测发现对比词答案存在事实偏差，建议以实体卡口径发澄清稿——涉品牌表态，必须您本人裁决。" } },
+    { aid: "apr-g-001", eid: `E-SEED-${EVENT_BASE_G + 11}`, tier: "l2_captain", title: "GEO 内容外发知乎", snapshot: { title: "「激光切割机怎么选」AI 答案版外发知乎", action: "geo.publish", params: { platform: "zhihu", format: "六段式", word_count: 1450 }, gate: "G-GEO1", ceo_rationale: "G-GEO2 事实红线校验已通过（实体锚点与实体卡逐字一致），品类词 P1 优先级，建议批准。", contentMd: "# GEO 外发请示\n\n六段式齐全，信源引用 3 处，实体锚点比对 12/12 一致。" } },
+    { aid: "apr-g-002", eid: `E-SEED-${EVENT_BASE_G + 21}`, tier: "l4_chairman", title: "Meta 加投 $500", snapshot: { title: "Meta 加投 $500 · 需要你拍板", action: "ads.boost", params: { campaign: "选型指南口播", amount: 500, window: "72h" }, gate: "G12", ceo_rationale: "素材正处爬升期（CTR 3.8%→5.1%），加投 ROI 预估 1:2.8；但涉预算，请您定。" } },
+    { aid: "apr-g-003", eid: `E-SEED-${EVENT_BASE_G + 31}`, tier: "l4_chairman", title: "品牌表态回应（强制 L4）", snapshot: { title: "「锐科 vs 竞对A」AI 答案负面偏差回应 · 强制 L4", action: "content.submit", params: { involves_brand_stance: true, topic: "对比词负面偏差澄清" }, gate: "G20", ceo_rationale: "能见度监测发现对比词答案存在事实偏差，建议以实体卡口径发澄清稿——涉品牌表态，必须您本人裁决。" } },
   ];
   for (const a of approvalsSeed) {
     await q(

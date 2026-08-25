@@ -99,12 +99,7 @@ const WS_LIST: typeof WS_CANDIDATES = [];
       await app.end();
     }
   }
-  {
-    console.log(`工作区探测：${WS_LIST.map((w) => w.wsId).join(" / ") || "（无演示工作区）"}
-`);
-  } finally {
-    await app.end();
-  }
+  console.log(`工作区探测：${WS_LIST.map((w) => w.wsId).join(" / ") || "（无演示工作区）"}\n`);
 }
 if (WS_LIST.length === 0) {
   results.push({ id: "G-01", name: "工作区探测", ok: false, detail: "无任何演示工作区（请先播种 db:seed*）", ms: 0 });

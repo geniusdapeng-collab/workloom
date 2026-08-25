@@ -326,8 +326,15 @@ function yunqiArchive(): Record<string, unknown> {
       },
       poi: { douyin_poi_id: "POI-YQ-001", meituan_shop_id: "MT-YQ-8899", status: "bound" },
       action_anchors: { ai_search_code: "云栖", monthly_rotation: true },
-      funnel_targets: { month: { exposure: 300000, inquiry: 300, lead: 120, deal: 36, repurchase_rate: 0.28 } },
+      funnel_targets: { month: { exposure: 6200000, inquiry: 1842, lead: 486, deal: 152, repurchase_rate: 0.31 } },
       ota_commission_benchmark: { "美团": 0.10, "携程": 0.12, "飞猪": 0.08 },
+      market_scan: { region_heat: { 西湖区: 92, 滨江区: 74 }, ota_review_gap: "竞对差评高频：隔音/早餐排队/停车难", holiday: "国庆 10.4-10.6 有 35% 空窗可抢" },
+      audience_segments: [
+        { key: "亲子家庭", share: 0.42, hook: "带娃的一天 vlog", channels: ["抖音", "小红书"] },
+        { key: "商旅人士", share: 0.35, hook: "商旅权益六段式", channels: ["AI搜索", "知乎"] },
+        { key: "情侣周末", share: 0.23, hook: "日落窗景实拍", channels: ["小红书", "视频号"] },
+      ],
+      strategy_weekly: { theme: "开学季亲子收口 + 国庆错峰抢订", kpi: "线索≥90/券核销≥60/GEO提及率≥32%" },
     },
     // 巡检只读快照（M9/F9.1 探针输入；E1 补登：07:00 巡检真实检出——高危差评 + 中危价格/房态异常）
     inspection: {
@@ -987,9 +994,169 @@ async function main(): Promise<void> {
           deals: 2, amount: 1474,
           by_entry: { douyin: 678, ai_search: 796 },
           ota_commission_saved: { note: "同单走 OTA 佣金对照", meituan_10pct: 147.4, xiecheng_12pct: 176.9 },
-          month_to_date: { deals: 31, amount: 23896, commission_saved_est: 2628.6 },
+          month_to_date: { deals: 152, amount: 128600, commission_saved_est: 14900, by_entry_mtd: { douyin: 61400, ai_search: 43800, xiaohongshu: 15600, wecom_referral: 7800 } },
         }, basis: ["来源链回写", "commission_rules 档案口径"] },
         rule_impact: [], receipt: acqReceipt(acqAt(60)), model_trace: acqMt,
+      } as SeedEvent,
+      // ⑬ 市场动态扫描（区域热度/竞对/节假日需求）
+      {
+        event_id: "E-SEED-8913", who: acqWho("channel-watcher"), context: acqCtx(acqAt(1440)),
+        object: { type: "intent_signal", id: "market-scan-w35", label: "市场动态扫描 W35" },
+        decision: { action: "market.scan", after: {
+          region_heat: { 西湖区: 92, 滨江区: 74, 拱墅区: 61, note: "开学季+中秋前置，亲子需求周环比 ▲38%" },
+          competitor_moves: [{ name: "西湖云舍", move: "抖音首播卖券 399 亲子套餐", threat: "中" }, { name: "云栖轻奢", move: "携程评分 4.9 但价格上调 12%", threat: "低" }],
+          ota_review_gap: "竞对近 30 天差评高频词：隔音(17)/早餐排队(11)/停车难(8)——全部是我方可打卖点",
+          holiday_forecast: "国庆前 21 天预订曲线启动，预测 10.1-10.3 满房，10.4-10.6 仍有 35% 空窗可抢",
+        }, basis: ["OTA/竞对/区域热度三源扫描", "节假日需求预测模型"] },
+        rule_impact: [], receipt: acqReceipt(acqAt(1440)), model_trace: acqMt,
+      } as SeedEvent,
+      // ⑭ 周策略备忘（公司CEO 定调）
+      {
+        event_id: "E-SEED-8914", who: acqWho("company-ceo"), context: acqCtx(acqAt(1400)),
+        object: { type: "campaign", id: "strategy-w35", label: "W35 获客策略备忘" },
+        decision: { action: "strategy.memo", after: {
+          theme: "开学季亲子收口 + 国庆错峰抢订",
+          content_plan: "短视频 ×6（亲子实拍 3/静音实测 2/延迟退房 1）+ 直播 ×2（周四/周日晚）+ GEO 图文 ×4",
+          coupon_plan: "亲子券补库存 200 → 400；上线国庆预售券 ¥899（10.4 后可约，填 35% 空窗）",
+          budget: { douyin_boost: 3000, note: "小额测试先跑，CTR>4% 再加投（超上限必请示）" },
+          kpi: "本周目标：线索 ≥90 / 券核销 ≥60 / GEO 提及率 ≥32%",
+        }, basis: ["市场扫描 W35", "意图雷达 TOP3", "房态日历联动"] },
+        rule_impact: [], receipt: acqReceipt(acqAt(1400)), model_trace: acqMt,
+      } as SeedEvent,
+      // ⑮ 目标人群圈选
+      {
+        event_id: "E-SEED-8915", who: acqWho("channel-watcher"), context: acqCtx(acqAt(1380)),
+        object: { type: "intent_signal", id: "audience-w35", label: "人群圈选三细分" },
+        decision: { action: "audience.segment", after: {
+          segments: [
+            { key: "亲子家庭", share: 0.42, intent: "儿童乐园/泳池/家庭房/安全", channels: ["抖音", "小红书"], hook: "带娃的一天 vlog" },
+            { key: "商旅人士", share: 0.35, intent: "延迟退房/发票/安静/近地铁", channels: ["AI搜索", "知乎"], hook: "商旅权益六段式" },
+            { key: "情侣周末", share: 0.23, intent: "湖景/拍照/氛围感", channels: ["小红书", "视频号"], hook: "日落窗景实拍" },
+          ],
+          note: "人群-意图-渠道-钩子四元组直接进内容排期与投放定向",
+        }, basis: ["评论私信语义聚类", "query 词性分析", "历史成交画像"] },
+        rule_impact: [], receipt: acqReceipt(acqAt(1380)), model_trace: acqMt,
+      } as SeedEvent,
+      // ⑯ 视频脚本成套（AI 视频制作）
+      {
+        event_id: "E-SEED-8916", who: acqWho("content-agent"), context: acqCtx(acqAt(1320)),
+        object: { type: "content", id: "script-family-081", label: "脚本《带娃住云栖的一天》" },
+        decision: { action: "script.draft", after: { shots: 7, hook: "2 岁娃进门第一句话：妈妈我还要来！", has_ai_answer_variant: true, duration: "38s" }, basis: ["人群钩子：亲子家庭", "意图信号：泳池+乐园"] },
+        rule_impact: [], receipt: acqReceipt(acqAt(1320)), model_trace: acqMt,
+      } as SeedEvent,
+      // ⑰ 导演评审过线
+      {
+        event_id: "E-SEED-8917", who: acqWho("content-agent"), context: acqCtx(acqAt(1300)),
+        object: { type: "content", id: "script-family-081", label: "导演评审 S01-S07" },
+        decision: { action: "render.review", after: { scores: { 钩子: 4.6, 真实感: 4.8, 节奏: 4.2, 合规: 5.0, 转化力: 4.4 }, verdict: "pass", note: "S03 重拍一次（娃的表情穿帮）后过线" }, basis: ["5 维导演评分", "事实红线闸机"] },
+        rule_impact: ri("R25", "pass"), receipt: acqReceipt(acqAt(1300)), model_trace: acqMt,
+      } as SeedEvent,
+      // ⑱ 渲染提交
+      {
+        event_id: "E-SEED-8918", who: acqWho("content-agent"), context: acqCtx(acqAt(1280)),
+        object: { type: "content", id: "render-family-081", label: "渲染合成 v1" },
+        decision: { action: "render.submit", after: { engine: "seedance-2.0", shots: 7, credits: 14, subtitle: true, platform_pack: ["douyin", "xiaohongshu"] }, basis: ["评审过线才允许烧额度"] },
+        rule_impact: [], receipt: acqReceipt(acqAt(1280)), model_trace: acqMt,
+      } as SeedEvent,
+      // ⑲ 爆款发布（抖音 86.2w）
+      {
+        event_id: "E-SEED-8919", who: acqWho("content-agent"), context: acqCtx(acqAt(1180)),
+        object: { type: "content", id: "vid-family-081", label: "抖音爆款《带娃住云栖的一天》" },
+        decision: { action: "campaign.publish", params: { fact_check_passed: true }, after: { platform: "douyin", plays: 862000, likes: 21400, comments: 486, favorites: 3120, shares: 892, poi: "POI-YQ-001", coupon: "CP-FAM-299", note: "发布 48h 数据；评论区获客意图 73 条已全部分流" }, basis: ["R25 口径校验", "POI+券挂载"] },
+        rule_impact: ri("R25", "pass"), receipt: acqReceipt(acqAt(1180)), model_trace: acqMt,
+      } as SeedEvent,
+      // ⑳ 小红书种草
+      {
+        event_id: "E-SEED-8920", who: acqWho("content-agent"), context: acqCtx(acqAt(1120)),
+        object: { type: "content", id: "xhs-quiet-012", label: "小红书《临街酒店能有多安静》" },
+        decision: { action: "campaign.publish", params: { fact_check_passed: true }, after: { platform: "xiaohongshu", plays: 53000, favorites: 3120, note: "灵感来自竞对差评「隔音差」——分贝仪实测，收藏率 5.9% 远超均值" }, basis: ["OTA 差评矿源", "人群钩子：商旅/浅眠"] },
+        rule_impact: ri("R25", "pass"), receipt: acqReceipt(acqAt(1120)), model_trace: acqMt,
+      } as SeedEvent,
+      // ㉑ 直播卖券（2 场 GMV）
+      {
+        event_id: "E-SEED-8921", who: acqWho("coupon-operator"), context: acqCtx(acqAt(1000)),
+        object: { type: "live_campaign", id: "live-w35-thu", label: "周四直播卖券专场" },
+        decision: { action: "live.campaign", after: { sessions: 2, gmv: 18400, coupons_sold: 52, peak_online: 1200, note: "对标实证形态：边走边播看房型+亲子乐园实景；切片 6 条二次分发" }, basis: ["W35 策略备忘", "券库存联动"] },
+        rule_impact: [...ri("R22", "pass"), ...ri("R26", "pass")], receipt: acqReceipt(acqAt(1000)), model_trace: acqMt,
+      } as SeedEvent,
+      // ㉒ GEO 六段式收录
+      {
+        event_id: "E-SEED-8922", who: acqWho("content-agent"), context: acqCtx(acqAt(900)),
+        object: { type: "content", id: "geo-biz-007", label: "GEO 图文《杭州商旅酒店怎么选》" },
+        decision: { action: "geo.publish", after: { channels: ["知乎", "百家号"], structure: "六段式（结论→事实→场景→细节→对比→行动锚点）", anchor_code: "云栖", indexed: true, note: "知乎发布 36h 被豆包/DeepSeek 引用" }, basis: ["hotel-geo-content 技能", "实体卡口径一致"] },
+        rule_impact: ri("R25", "pass"), receipt: acqReceipt(acqAt(900)), model_trace: acqMt,
+      } as SeedEvent,
+      // ㉓ 酒店词能见度周报（区域第一）
+      {
+        event_id: "E-SEED-8923", who: acqWho("channel-watcher"), context: acqCtx(acqAt(840)),
+        object: { type: "intent_signal", id: "visibility-w35", label: "酒店词能见度周报" },
+        decision: { action: "visibility.snapshot", after: {
+          mention_rate: 0.34, first_rate: 0.12, sov: 0.28, rank: "区域第一（竞对A 21%/10%/19%）",
+          by_platform: { doubao: 0.41, deepseek: 0.36, yuanbao: 0.29, chatgpt: 0.30 },
+          trend_4w: [0.22, 0.26, 0.30, 0.34], note: "4 周连涨；「杭州亲子酒店」首推破零后已 3 次",
+        }, basis: ["query 集 32 词周频采集", "原始答案截图存证"] },
+        rule_impact: [], receipt: acqReceipt(acqAt(840)), model_trace: acqMt,
+      } as SeedEvent,
+      // ㉔ 落地页批量留资（周末高峰）
+      {
+        event_id: "E-SEED-8924", who: acqWho("ai-receptionist"), context: acqCtx(acqAt(720)),
+        object: { type: "lead", id: "lead-batch-w35", label: "周末落地页批量线索" },
+        decision: { action: "lead.capture", after: { count: 47, entries: { douyin_lp: 21, xiaohongshu_lp: 14, ai_search_code: 12 }, peak_window: "周六 20-22 点", first_response_p50_sec: 31, note: "高峰首响仍守住 60s SLA（AI 接待已按复盘调整话术优先级）" }, basis: ["落地页表单+行动锚点"] },
+        rule_impact: ri("R24", "pass"), receipt: acqReceipt(acqAt(720)), model_trace: acqMt,
+      } as SeedEvent,
+      // ㉕ B 级培育转化（商旅长住）
+      {
+        event_id: "E-SEED-8925", who: acqWho("ai-receptionist"), context: acqCtx(acqAt(600)),
+        object: { type: "lead", id: "lead-20260820-017", label: "B级培育转化·商旅长住" },
+        decision: { action: "lead.nurture", after: { nurture_days: 12, touches: 3, converted: true, deal: "长住协议价 ¥428/晚 × 每月 8 晚", note: "培育池第 3 次定向触达（延迟退房权益内容）后主动回询" }, basis: ["B 级培育 SOP", "频率合规 R9"] },
+        rule_impact: ri("R9", "pass"), receipt: acqReceipt(acqAt(600)), model_trace: acqMt,
+      } as SeedEvent,
+      // ㉖ 会议团大单（A 级人审报价成交）
+      {
+        event_id: "E-SEED-8926", who: acqWho("ai-receptionist"), context: acqCtx(acqAt(500)),
+        object: { type: "booking_order", id: "BK-20260824-103", label: "会议团 20 间夜大单" },
+        decision: { action: "booking.confirm", after: { lead_id: "lead-20260824-003", rooms: 10, nights: 2, amount: 17520, rate: 438, deposit: 0.3, note: "R21 人审报价 438/间夜 + 30% 定金担保（R5 联动）；9 月中旬周中填谷" }, basis: ["A 级 1h SLA", "人审报价留痕"] },
+        rule_impact: [...ri("R21", "pass"), ...ri("R5", "pass")], receipt: acqReceipt(acqAt(500)), model_trace: acqMt,
+      } as SeedEvent,
+      // ㉗ 月度归因战报（丰厚：¥128,600 / 节省 ¥14,900）
+      {
+        event_id: "E-SEED-8927", who: acqWho("coupon-operator"), context: acqCtx(acqAt(45)),
+        object: { type: "conversion", id: "conv-month-0825", label: "月度归因战报（8.1-8.25）" },
+        decision: { action: "conversion.attribute", after: {
+          period: "2026-08-01~25", deals: 152, amount: 128600,
+          by_entry: { douyin: 61400, ai_search: 43800, xiaohongshu: 15600, wecom_referral: 7800 },
+          mix: { coupon_verified: { deals: 96, amount: 61400 }, direct_booking: { deals: 56, amount: 67200 } },
+          ota_commission_saved: 14900, saved_note: "同单走 OTA 加权佣金（美团10%/携程12%）对照——这就是省下的纯利",
+          occupancy_lift: "直连+券订单贡献 OCC +6.8pt（83% 中含）",
+        }, basis: ["来源链全量回写", "commission_rules 档案口径"] },
+        rule_impact: [], receipt: acqReceipt(acqAt(45)), model_trace: acqMt,
+      } as SeedEvent,
+      // ㉘ 老带新转介绍
+      {
+        event_id: "E-SEED-8928", who: acqWho("guest-success"), context: acqCtx(acqAt(400)),
+        object: { type: "member", id: "referral-w35", label: "老带新转介绍周" },
+        decision: { action: "member.referral", after: { deals: 17, amount: 7800, top_advocate: "周先生（金卡）带来 4 单", reward_cost: 680, roi: "激励成本 ¥680 → 成交 ¥7,800（11.5×）" }, basis: ["双向礼遇 SOP", "渠道码归因"] },
+        rule_impact: [], receipt: acqReceipt(acqAt(400)), model_trace: acqMt,
+      } as SeedEvent,
+      // ㉙ 好评资产沉淀（OTA 4.6→4.8）
+      {
+        event_id: "E-SEED-8929", who: acqWho("guest-success"), context: acqCtx(acqAt(300)),
+        object: { type: "member", id: "review-asset-w35", label: "好评资产周报" },
+        decision: { action: "review.asset.boost", after: { new_reviews: 42, positive_rate: 0.93, ota_score: "4.6 → 4.8", note: "离店 2h 关怀触点的好评引导（合规不利诱）；差评 2 条均 SLA 内响应并闭环" }, basis: ["好评引导 SOP", "R19 差评 SLA"] },
+        rule_impact: [...ri("R19", "pass"), ...ri("R9", "pass")], receipt: acqReceipt(acqAt(300)), model_trace: acqMt,
+      } as SeedEvent,
+      // ㉚ 六级漏斗周报复盘反哺
+      {
+        event_id: "E-SEED-8930", who: acqWho("company-ceo"), context: acqCtx(acqAt(120)),
+        object: { type: "alert", id: "funnel-w35", label: "六级漏斗周报 W35" },
+        decision: { action: "funnel.weekly", after: {
+          funnel: { exposure: 6200000, engage: 312000, inquiry: 1842, lead: 486, deal: 152, repurchase: 47 },
+          rates: { 曝光互动: 0.050, 互动询盘: 0.0059, 询盘留资: 0.264, 留资成交: 0.313, 成交复购: 0.309 },
+          weakest: "互动→询盘 0.59%（视频 CTA 弱）",
+          action: "下周全部视频前 3s 加「评论区扣 1 领券」口播；GEO 图文行动锚点前置到第 2 段",
+          roi: "内容+投放成本 ¥9,400 → 归因成交 ¥128,600（13.7×）",
+        }, basis: ["六级漏斗报表", "周一晨会裁决"] },
+        rule_impact: [], receipt: acqReceipt(acqAt(120)), model_trace: acqMt,
       } as SeedEvent,
       // ⑫ 住客关怀 + 好评引导（合规）
       {
@@ -1013,7 +1180,7 @@ async function main(): Promise<void> {
       );
       if (res.rows[0]?.inserted) { prevHash = hash; acqInserted += 1; }
     }
-    console.log(`✓ 获客域剧本事件 ×${acqInserted}/12（意图雷达→承接→券成交→归因→住客，五环留痕）`);
+    console.log(`✓ 获客域剧本事件 ×${acqInserted}/30（市场扫描→策略→人群→AI视频→社媒→GEO→线索→成交→归因→复购，全流程留痕）`);
   }
 
   // CEO 晨报事件（剧场汇报气泡/董事长视图简报流的数据源；幂等键 E-SEED-8999）

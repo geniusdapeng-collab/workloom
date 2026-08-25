@@ -1,5 +1,35 @@
 # Changelog
 
+## [3.4.0] - 2026-08-25 · 更名「WorkLoom AI 获客系统」+ 糖果色视觉 + 饱满获客运行态
+
+### 更名与定位
+
+- 项目正式更名 **WorkLoom AI 获客系统**：README 按 AI 获客实际内容重构（先算三笔账/获客视角的一天/获客五环主线）；package.json → workloom-ai-acquisition；演示页品牌统一。
+
+### 视觉改造（深空蓝 → 小红书式糖果色）
+
+- 设计令牌（apps/web + apps/webc）：奶莓浅底四阶 / 珊瑚红主色 #ff2442→#ff7a9e / 蓝莓信息色 / 糖果语义四色（薄荷绿/蜜桃橙/草莓红/葡萄紫）/ 可可文字三级 / goldhi 深珊瑚 #d4002a
+- Bridge 舰桥框架糖果化（云白渐变/糖果晕染/珊瑚星点）；P0 剧场（奶莓底/珊瑚星点/三 Bundle 地板主题：酒店蜜桃·片场薰衣草·GEO 天空蓝）
+- 对比修复：SimBanner/P0 头部/信息行/Floor 网格与气泡/gamification 光辉
+- 8 个演示 HTML 全量糖果化（hotel-guest/owner、geo-customer-app、hyperreality-pc/mobile、service-front×3）
+
+### 饱满获客运行态（获客丰厚酒店全流程模拟）
+
+- 种子获客剧本事件 12→30 条：市场动态扫描 → 周策略备忘 → 人群三细分圈选 → AI 视频（脚本/导演评审/渲染）→ 社媒营销（抖音爆款 86.2w/小红书种草/直播 GMV ¥18,400）→ GEO（六段式收录/能见度 34% 区域第一）→ 线索（周末批量 47 条/B 级培育转化）→ 成交（会议团 ¥17,520/月归因 ¥128,600/佣金节省 ¥14,900）→ 复购（转介绍 11.5× ROI/OTA 评分 4.6→4.8/六级漏斗 ROI 13.7×）
+- 档案 acquisition 字段组扩充：market_scan/audience_segments/strategy_weekly/funnel_targets 丰厚口径
+- 店长驾驶舱 demo 丰厚化：北极星 ¥128,600/六级漏斗 620w 曝光链/市场+策略+人群三卡/本周内容实绩卡
+
+### 测试修复（D32）
+
+- R-11/R-16 队列隔离：历史用例遗留 l2_captain 待批被节拍分批消化（escalate 发事件不计 decided）造成计数假失败——测试前快照暂拒、finally 恢复
+- suite-hotel E-07 批量留资事件脱敏校验口径；套件获客事件期望 12→30
+
+### 验证
+
+- suite 445/445 · suite:geo 77/77 · suite:hotel 43/43 · typecheck 0 error
+
+## [3.3.0] - 2026-08-25 · 酒店垂直经营系统：社媒营销 × GEO × 获客 × 运营一体
+
 ## [3.3.0] - 2026-08-25 · 酒店垂直经营系统：社媒营销 × GEO × 获客 × 运营一体
 
 ### P0 酒店垂直资产迁移（自 workloom-hotel v2.3.1，原仓库不变）

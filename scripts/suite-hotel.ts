@@ -210,9 +210,9 @@ c("12 个触发器（含获客 2 个）", async () => {
   const acq = await q(`SELECT id FROM triggers WHERE workspace_id=$1 AND id IN ('tg-intent-radar-0700','tg-lead-follow-30min')`, [WS]);
   assert(acq.rowCount === 2, "获客触发器缺失");
 });
-c("获客域剧本事件 12 条全部落库", async () => {
-  const r = await q(`SELECT count(*) n FROM biz_events WHERE workspace_id=$1 AND event_id >= 'E-SEED-8901' AND event_id <= 'E-SEED-8912'`, [WS]);
-  assert(Number(r.rows[0].n) === 12, `获客事件=${r.rows[0].n}`);
+c("获客域剧本事件 30 条全部落库", async () => {
+  const r = await q(`SELECT count(*) n FROM biz_events WHERE workspace_id=$1 AND event_id >= 'E-SEED-8901' AND event_id <= 'E-SEED-8930'`, [WS]);
+  assert(Number(r.rows[0].n) === 30, `获客事件=${r.rows[0].n}`);
 });
 c("一店一档含获客字段组（query 集/POI/漏斗目标）", async () => {
   const r = await q(`SELECT archive FROM profiles WHERE workspace_id=$1 LIMIT 1`, [WS]);
@@ -271,19 +271,19 @@ d("客群 patch 与基线单调守卫（只紧不松）", () => {
 /* ================= E · 获客事件留痕合规 ================= */
 const e = C("E");
 e("获客事件对象类型全部在对象模型内", async () => {
-  const r = await q(`SELECT DISTINCT payload->'object'->>'type' t FROM biz_events WHERE workspace_id=$1 AND event_id >= 'E-SEED-8901' AND event_id <= 'E-SEED-8912'`, [WS]);
+  const r = await q(`SELECT DISTINCT payload->'object'->>'type' t FROM biz_events WHERE workspace_id=$1 AND event_id >= 'E-SEED-8901' AND event_id <= 'E-SEED-8930'`, [WS]);
   for (const row of r.rows) assert(objectTypes.has(row.t), `事件对象 ${row.t} 未在对象模型`);
 });
 e("获客事件 who 全部在编", async () => {
-  const r = await q(`SELECT DISTINCT payload->'who'->>'id' id FROM biz_events WHERE workspace_id=$1 AND event_id >= 'E-SEED-8901' AND event_id <= 'E-SEED-8912'`, [WS]);
+  const r = await q(`SELECT DISTINCT payload->'who'->>'id' id FROM biz_events WHERE workspace_id=$1 AND event_id >= 'E-SEED-8901' AND event_id <= 'E-SEED-8930'`, [WS]);
   for (const row of r.rows) assert(presetKeys.has(row.id), `who=${row.id} 不在编`);
 });
 e("获客事件五元字段完整", async () => {
-  const r = await q(`SELECT count(*) n FROM biz_events WHERE workspace_id=$1 AND event_id >= 'E-SEED-8901' AND event_id <= 'E-SEED-8912' AND (payload->>'who' IS NULL OR payload->>'object' IS NULL OR payload->>'decision' IS NULL OR payload->>'receipt' IS NULL OR payload->>'model_trace' IS NULL)`, [WS]);
+  const r = await q(`SELECT count(*) n FROM biz_events WHERE workspace_id=$1 AND event_id >= 'E-SEED-8901' AND event_id <= 'E-SEED-8930' AND (payload->>'who' IS NULL OR payload->>'object' IS NULL OR payload->>'decision' IS NULL OR payload->>'receipt' IS NULL OR payload->>'model_trace' IS NULL)`, [WS]);
   assert(Number(r.rows[0].n) === 0, `五元缺失 ${r.rows[0].n} 条`);
 });
 e("rule_impact 引用的规则均存在且版本正确", async () => {
-  const r = await q(`SELECT DISTINCT ir->>'rule_id' rid, ir->>'version' ver FROM biz_events, jsonb_array_elements(payload->'rule_impact') ir WHERE workspace_id=$1 AND event_id >= 'E-SEED-8901' AND event_id <= 'E-SEED-8912'`, [WS]);
+  const r = await q(`SELECT DISTINCT ir->>'rule_id' rid, ir->>'version' ver FROM biz_events, jsonb_array_elements(payload->'rule_impact') ir WHERE workspace_id=$1 AND event_id >= 'E-SEED-8901' AND event_id <= 'E-SEED-8930'`, [WS]);
   for (const row of r.rows) {
     assert(fenceIds.has(row.rid), `未知规则 ${row.rid}`);
     assert(row.ver === FENCE_VERSION, `${row.rid} 版本 ${row.ver} ≠ ${FENCE_VERSION}`);
@@ -299,7 +299,8 @@ e("归因事件含来源链与佣金对照（北极星数据）", async () => {
   assert(aft?.by_entry && aft?.ota_commission_saved, "归因缺来源链/佣金对照");
 });
 e("线索事件客资已脱敏（无明文手机号）", async () => {
-  const r = await q(`SELECT payload->'decision'->'after'->>'contact_masked' cm FROM biz_events WHERE workspace_id=$1 AND payload->'decision'->>'action'='lead.capture'`, [WS]);
+  // 批量留资事件（count 口径）无单体 contact 字段，只校验含 contact_masked 的单体线索事件
+  const r = await q(`SELECT payload->'decision'->'after'->>'contact_masked' cm FROM biz_events WHERE workspace_id=$1 AND payload->'decision'->>'action'='lead.capture' AND payload->'decision'->'after'->>'contact_masked' IS NOT NULL`, [WS]);
   assert(r.rowCount! >= 2, "线索样本不足");
   for (const row of r.rows) assert(String(row.cm).includes("****"), `客资未脱敏 ${row.cm}`);
 });

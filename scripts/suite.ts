@@ -1292,14 +1292,14 @@ h("D15-④ 吊销：装配围栏并集排除吊销技能", async () => {
   const { revokeSkill, installSkill, resolveAgentFenceBindings } = await import("@workloom/base/skills");
   const skillId = `skill-t-ws-yunqi-revasm-${SFX}`;
   // 绑定用 R5：种子安装行（skill-revenue-manager）快照含 R1/R2，用 R2 会被种子行干扰
-  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'official','hyperreality-ai-video','装配吊销','1.0.0','d','["R3"]','b',true)`, [skillId]);
+  await qApp(`INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized) VALUES ($1,'official','hyperreality-ai-video','装配吊销','1.0.0','d','["R16"]','b',true)`, [skillId]);
   await installSkill(app, gw, scope, { skillId, by: "MEM-001" });
   const ag = await qApp<{ id: string }>(`SELECT id FROM agents WHERE workspace_id=$1 AND preset_key='pricing-agent'`, [scope.workspaceId]);
   const before = await resolveAgentFenceBindings(app, scope, ag.rows[0]!.id);
-  assert(before.includes("R3"), "吊销前并入");
+  assert(before.includes("R16"), "吊销前并入");
   await revokeSkill(app, gw, scope, { skillId, reason: "测试吊销", by: "MEM-001" });
   const after = await resolveAgentFenceBindings(app, scope, ag.rows[0]!.id);
-  assert(!after.includes("R3"), "吊销后并集收缩");
+  assert(!after.includes("R16"), "吊销后并集收缩");
   const { uninstallSkill } = await import("@workloom/base/skills");
   await uninstallSkill(app, gw, scope, { skillId, by: "MEM-001" });
 });

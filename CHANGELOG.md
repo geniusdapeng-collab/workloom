@@ -1,5 +1,40 @@
 # Changelog
 
+## [3.3.0] - 2026-08-25 · 酒店垂直经营系统：社媒营销 × GEO × 获客 × 运营一体
+
+### P0 酒店垂直资产迁移（自 workloom-hotel v2.3.1，原仓库不变）
+
+- bundles/hotel 全量替换：围栏 v3 R1-R20 + 三客群 patch + segment-defaults 客群默认安装清单 + 25 官方技能 + 11 员工 + 20 对象 + floor-scene
+- seed 垂直化：14 个经营字段组（business/channels/price_calendar/operations/staffing/suppliers/goals/approval_matrix/compensation_policy/linen/incident_profile/faq_kb/live_rules/segment+pms_vendor）+ 行业触发器 ×4 + 围栏版本化装载（旧版本滚动 rolled_back）
+- 销售资产：docs/sales 一页纸×3 + methodology 落地三技能体系 + 用户指南×4
+
+### P1 获客域落地（获客五环并入单 Bundle）
+
+- **对象 20→28 类**：+intent_signal/lead/coupon_sku/booking_order/poi_store/conversion/live_campaign/content
+- **员工 11→16 员**：+AI接待员（四路承接 7×24）/团购运营/住客运营/渠道哨兵（意图雷达）/公司CEO（漏斗复盘指挥）
+- **围栏 v3→v4（R1-R26）**：+R21 AI 接待报价承诺必审 / R22 券库存熔断 / R23 线索数据出域必审 / R24 客资隐私红线 / R25 获客内容口径校验 / R26 券定价红线
+- **技能 25→29**：+lead-concierge/coupon-ops/hotel-geo-content/intent-radar
+- **管线**：hotel-acquisition-loop 九步五环主链路（雷达→排期→发布→承接→分级→转化→归因→复购→复盘）
+- **连接器清单 ×4**：PMS/抖音本地生活/OTA/企微（mock 先行，bundles/hotel/connectors/connectors.json）
+- **三客群分型并入获客组**：民宿获客技能紧随 content-marketing 前置（种草是命脉）
+- **种子获客化**：12 条获客剧本事件（意图雷达→26s 首响 A 级留资→券成交→归因含 OTA 佣金节省对照→住客关怀）+ 档案 acquisition 字段组 + 获客触发器 ×2
+
+### 演示系统更新
+
+- 新增 docs/demo/hotel-guest-app.html：C 端住客小程序原型（首页种草/抢券/AI 前台/订单/会员 5 屏，含 R21 报价人审演示）
+- 新增 docs/demo/hotel-owner-app.html：B 端店长驾驶舱原型（战报+六级漏斗+归因成交额+佣金节省/线索/审批/16 员工/我的 5 屏）
+
+### 测试资产
+
+- scripts/suite-hotel.ts 43 用例（pnpm suite:hotel）：Bundle 完整性 / R21-R26 正反例 / 种子运行态 / 管线与客群分型 / 获客事件留痕
+- 发布门禁登记 suite:hotel（skills/official/release-gate + docs/release-checklist.md）
+
+### 验证
+
+- suite 445/445 · suite:geo 77/77 · suite:hotel 43/43 · release:gate 15/15 · 验链 0 异常
+
+## [2.0.5] - 2026-08-24 · 发布门禁技能化（D31）：跨仓库底座同步 + workloom-release-gate 技能
+
 本文件记录 WorkLoom IM 底座的变更历史。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 
 ## [2.0.5] - 2026-08-24 · 发布门禁技能化（D31）：跨仓库底座同步 + workloom-release-gate 技能

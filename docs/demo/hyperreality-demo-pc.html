@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>视频经理 HyperReality · PC 舰桥演示</title>
+<title>视频经理 HyperReality · PC 端演示</title>
 <style>
 /* ===== 设计令牌：逐值镜像 apps/web/src/styles/tokens.css（§2.1 色板 / §3 字体 / §4.1 布局） ===== */
 :root{
@@ -397,11 +397,11 @@ table.ftab{width:100%;border-collapse:collapse;font-size:12px}
 <nav class="demo-nav">
   <span class="dn-tag">DEMO NAV · 对应真实路由</span>
   <button class="dtab on" data-v="p0">P0 剧场<span class="rt">/p0</span></button>
-  <button class="dtab" data-v="p1">P1 主甲板<span class="rt">/p1</span></button>
-  <button class="dtab" data-v="p2">P2 任务舱<span class="rt">/p2/T-101</span></button>
+  <button class="dtab" data-v="p1">P1 工作台<span class="rt">/p1</span></button>
+  <button class="dtab" data-v="p2">P2 任务页<span class="rt">/p2/T-101</span></button>
   <button class="dtab" data-v="p3">P3 掌上战报<span class="rt">/p3</span></button>
   <button class="dtab" data-v="p4">P4 决断队列<span class="rt">/p4</span></button>
-  <button class="dtab" data-v="p5">P5 航道管制<span class="rt">/p5</span></button>
+  <button class="dtab" data-v="p5">P5 规则权限<span class="rt">/p5</span></button>
   <button class="dtab" data-v="p6">P6 装备库<span class="rt">/p6</span></button>
   <button class="dtab" data-v="p8">P8 船员名册<span class="rt">/p8</span></button>
   <button class="dtab" data-v="p9">P9 守夜战队<span class="rt">/p9</span></button>
@@ -569,9 +569,9 @@ table.ftab{width:100%;border-collapse:collapse;font-size:12px}
       </div>
     </section>
 
-    <!-- ============ P1 主甲板 ============ -->
+    <!-- ============ P1 工作台 ============ -->
     <section class="view" id="v-p1">
-      <div class="phead"><h2>主甲板 · 舰桥</h2><span class="pcode">P1 · MAIN DECK</span></div>
+      <div class="phead"><h2>工作台 · 总览</h2><span class="pcode">P1 · OVERVIEW</span></div>
       <div class="sysdiv">08:30 · 星芒好物 · 陈主理 已上线（演示身份 MEM-V01 陈主理）</div>
 
       <!-- 交接班卡（与 P3 计数强一致 F4.4） -->
@@ -618,15 +618,15 @@ table.ftab{width:100%;border-collapse:collapse;font-size:12px}
       <div class="dispatch">
         <div class="chips"><span class="chip holo">星芒好物</span><span class="chip">阶段：量产爬坡期</span></div>
         <div class="irow">
-          <input id="p1Input" placeholder="说出目标，舰队即刻启航…（含糊指令会反问澄清，不建任务 F3.2）">
+          <input id="p1Input" placeholder="说出目标，团队即刻开工…（含糊指令会反问澄清，不建任务 F3.2）">
           <button class="btn gold" onclick="p1Send()">启航</button>
         </div>
       </div>
     </section>
 
-    <!-- ============ P2 任务舱 ============ -->
+    <!-- ============ P2 任务页 ============ -->
     <section class="view" id="v-p2">
-      <div class="phead"><h2>任务舱 · 主线执行</h2><span class="pcode">P2 · QUEST CABIN</span>
+      <div class="phead"><h2>任务执行</h2><span class="pcode">P2 · QUEST</span>
         <span class="chip gold">主线 QUEST</span><span class="mono" style="font-size:10px;color:var(--ink3)">T-101</span>
         <span style="font-size:13.5px;color:var(--ink2)">保温杯种草片·三镜渲染</span>
         <span style="flex:1"></span>
@@ -813,9 +813,9 @@ table.ftab{width:100%;border-collapse:collapse;font-size:12px}
       </div>
     </section>
 
-    <!-- ============ P5 航道管制 ============ -->
+    <!-- ============ P5 规则权限 ============ -->
     <section class="view" id="v-p5">
-      <div class="phead"><h2>航道管制台</h2><span class="pcode">P5 · FENCE</span>
+      <div class="phead"><h2>规则与权限</h2><span class="pcode">P5 · FENCE</span>
         <span class="chip holo mono">ai-video-baseline/v1</span>
         <span class="sub">三级授权 auto/review/block · 基线只许收紧（单调守卫 L2.1）</span></div>
       <div class="panel" style="margin-bottom:12px">
@@ -1415,7 +1415,7 @@ function brakeGo(){brakeReset();toast('🛑 紧急制动已触发：nightShift.p
   document.querySelectorAll('.night-pill .d').forEach(d=>{d.style.background='var(--warn)';d.style.boxShadow='0 0 10px var(--warn)'})}
 function brakeReset(){document.getElementById('brakeWrap').innerHTML='<button class="brake" onclick="armBrake()" title="紧急制动：一键暂停全部夜间 Agent（G5 · ≤60s）">🛑 紧急制动</button>'}
 function p1Send(){const i=document.getElementById('p1Input');if(!i.value.trim()){toast('输入点什么，班组随时待命');return}
-  toast(i.value.trim().length<6?'航线待确认（未建任务）：请补充目标与时间（F3.2 含糊→反问）':'已启航：threads.dispatch 建档，新线程出现列表顶部（0/19 蓝呼吸）');i.value=''}
+  toast(i.value.trim().length<6?'任务待确认（未建任务）：请补充目标与时间（F3.2 含糊→反问）':'已启航：threads.dispatch 建档，新线程出现列表顶部（0/19 蓝呼吸）');i.value=''}
 function p2Mode(btn,m){btn.parentElement.querySelectorAll('.btn').forEach(x=>x.classList.remove('gline'));btn.classList.add('gline');toast('已切换模式：'+m)}
 function p2Send(){const i=document.getElementById('p2Input');if(!i.value.trim()){toast('输入点什么，班组随时待命');return}
   const esc=i.value.replace(/</g,'&lt;');
@@ -1547,11 +1547,11 @@ function ringSend(raw){
   if(ringIsQ(text)){
     reply={action:'星环参谋 · 应答',rcpt:'synced',txt:'昨夜经营无越围栏项：✓14 ◆2 ▲1 · 能量 86（峰谷）。今日优先：① 批 2 张请示卡（渲染师小燃 S01 提交 · 发布专员 B站首发）② 跟进小红书收藏率告警 ③ 20:00 抖音正片定时发布（G9 已批）。（threads.dispatch → ask 即时应答，演示拟真）'};
   }else{
-    reply={action:'总导演已接单',rcpt:'unverified',txt:`已立项 T-10x（状态 queued）：「${esc}」。点击跳任务舱跟进执行。`,link:true};
+    reply={action:'总导演已接单',rcpt:'unverified',txt:`已立项 T-10x（状态 queued）：「${esc}」。点击跳任务页跟进执行。`,link:true};
   }
   box.insertAdjacentHTML('beforeend',`<div class="amsg"><div class="b">
     <div class="mh"><span class="snd">星环参谋</span><span class="ver">star-ring</span><span class="eid">#E-92xx</span><span class="rcpt ${reply.rcpt}">${reply.rcpt==='synced'?'✓ 已生效':'⚠ 未核实'}</span></div>
-    <div class="act">${reply.action}</div><div class="bd">${reply.txt}${reply.link?` <a style="color:var(--holo);cursor:pointer" onclick="ringSet(0);gotoV('p2')">→ 任务舱跟进</a>`:''}</div>
+    <div class="act">${reply.action}</div><div class="bd">${reply.txt}${reply.link?` <a style="color:var(--holo);cursor:pointer" onclick="ringSet(0);gotoV('p2')">→ 任务页跟进</a>`:''}</div>
   </div></div>`);
   box.scrollTop=box.scrollHeight;
   ['ringInput1','ringInput2'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});

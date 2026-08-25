@@ -269,7 +269,7 @@ export default function P0() {
       <main className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-4">
         {view === "floor" && data?.floor ? (
           <div className={`w-full max-w-3xl transition-all duration-1000 ${showCeremony && ceremony < 2 ? "scale-95 opacity-0" : "opacity-100"}`}>
-            <div className="mb-1 flex items-center gap-2 px-1 text-[11px] text-ink3">
+            <div className="mb-1 flex items-center gap-2 px-1 text-[11px] text-ink2">
               <span className="font-semibold text-holo">{data.floor.scene.name}</span>
               <span>·</span><span>{data.floor.agents.filter((a) => a.state === "working").length} 工作中</span>
               <span>·</span><span className={data.floor.agents.some((a) => a.state === "asking") ? "text-amber-600" : ""}>{data.floor.agents.filter((a) => a.state === "asking").length} 请您定</span>

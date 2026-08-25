@@ -164,7 +164,7 @@ export function FloorView({
           ctx.fillStyle = "#6adf8a"; for (let i = 0; i < 4; i++) ctx.fillRect(sx - 14 + i * 8, sy - 16, 5, 3);
           ctx.fillStyle = "#ffbe6a"; ctx.fillRect(sx - 14, sy - 10, 5, 3);
         }
-        if (pr.label) { ctx.fillStyle = "#9a9aa8"; ctx.font = "8px sans-serif"; ctx.textAlign = "center"; ctx.fillText(pr.label, sx, sy + 12); }
+        if (pr.label) { ctx.fillStyle = "#8a757d"; ctx.font = "8px sans-serif"; ctx.textAlign = "center"; ctx.fillText(pr.label, sx, sy + 12); }
       }
 
       /* CEO 指挥台 */
@@ -225,11 +225,13 @@ export function FloorView({
 
         /* 名牌 + 气泡 */
         ctx.font = "8.5px sans-serif"; ctx.textAlign = "center";
-        ctx.fillStyle = "rgba(10,10,18,.72)";
+        ctx.fillStyle = "rgba(255,255,255,.88)";
         const label = a.name.replace(/^agt-/, "");
         const lw = ctx.measureText(label).width + 10;
         roundRect(ctx, sx - lw / 2, sy + 6, lw, 12, 6); ctx.fill();
-        ctx.fillStyle = "#e8e8f0"; ctx.fillText(label, sx, sy + 15);
+        ctx.strokeStyle = "rgba(51,38,43,.18)"; ctx.lineWidth = 1;
+        roundRect(ctx, sx - lw / 2, sy + 6, lw, 12, 6); ctx.stroke();
+        ctx.fillStyle = "#33262b"; ctx.fillText(label, sx, sy + 15);
         if (a.state === "asking") {
           bubble(ctx, sx, sy - 46, a.pendingTier === "l4_chairman" ? "请您定（董事长级）" : "请您定", "#e8890c");
           // 聚光灯
@@ -302,9 +304,10 @@ function bubble(ctx: CanvasRenderingContext2D, sx: number, sy: number, text: str
   ctx.fillStyle = color; ctx.fillText(text, sx, sy + 2);
 }
 
+// 糖果浅底对比口径（D33）：浅色系头身色加深，保证员工在浅地板上轮廓清晰
 const SKIN: Record<string, [string, string]> = {
-  working: ["#6adf8a", "#2a8a4a"], asking: ["#8ad8ff", "#3a9ec8"], blocked: ["#ffbe6a", "#c8842a"],
-  celebrating: ["#8ad8ff", "#3a9ec8"], collab: ["#e8a2ff", "#8a4ac8"], idle: ["#9a9aa8", "#5a5a68"], disabled: ["#666", "#444"],
+  working: ["#22c88a", "#0e7a4a"], asking: ["#4d96ff", "#2a6ac8"], blocked: ["#ffaa33", "#c87a1a"],
+  celebrating: ["#4d96ff", "#2a6ac8"], collab: ["#b678ff", "#7a3ac8"], idle: ["#7a5c64", "#4a383e"], disabled: ["#666", "#444"],
 };
 
 function drawAgent(ctx: CanvasRenderingContext2D, sx: number, sy: number, rt: ActorRt, a: FloorAgent, now: number, walking: boolean) {

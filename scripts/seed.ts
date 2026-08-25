@@ -2,8 +2,8 @@
  * A5 · 演示种子数据（PRD V2.5 P 章示例场景：云栖酒店）
  * 用法：pnpm db:seed（读取 .env；幂等，可重复执行）
  *
- * 内容：demo 租户 / 云栖酒店工作区 / 3 人类成员 / 7 Agent preset 实例 /
- *      一店一档（含 forbidden 硬约束）/ 基线围栏 R1–R6 装载 / 3 官方技能 /
+ * 内容：demo 租户 / 云栖酒店工作区 / 3 人类成员 / 11 Agent preset 实例 /
+ *      一店一档（含 forbidden 硬约束 + 布草/断点/FAQ 字段组）/ 基线围栏 R1–R20（hotel-baseline/v3）装载 / 25 官方技能 /
  *      2 触发器 / 昨夜夜班班次 / 100 条五元事件（哈希链）/ 审批样例 / 组织记忆
  *
  * 纪律：
@@ -45,7 +45,7 @@ const TENANT_NAME = "演示租户（Demo）";
 const WS_ID = "ws-yunqi";
 const WS_NAME = "云栖酒店";
 const WS_SLUG = "yunqi-hotel";
-const FENCE_VERSION = "hotel-baseline/v1";
+const FENCE_VERSION = "hotel-baseline/v3";
 
 const MEMBERS = [
   { id: "MEM-001", name: "王店长", role: "owner" },
@@ -157,10 +157,33 @@ function loadSkills(): SkillDoc[] {
       const raw = readFileSync(join(dir, d, "SKILL.md"), "utf-8");
       const m = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
       const fm = YAML.parse(m?.[1] ?? "{}");
+      // v3 全量绑定表（25 技能；与 workloom-hotel v2.3.1 同口径）
       const bindMap: Record<string, string[]> = {
-        "revenue-manager": ["R1", "R2"],
+        "revenue-manager": ["R1", "R2", "R7", "R8"],
         "review-crisis": ["R6"],
         "channel-reconciler": ["R4", "R5"],
+        "inspection-suite": [],
+        "night-audit-suite": ["R5"],
+        "checkin-checkout": ["R4", "R14"],
+        "customer-service": ["R13"],
+        "content-marketing": ["R3", "R15"],
+        "retention-manager": ["R9"],
+        "inventory-procurement": ["R11"],
+        "staff-scheduler": ["R12"],
+        "safety-compliance": ["R10"],
+        "finance-reporting": [],
+        "morning-briefing": [],
+        "handover-manager": [],
+        "pricing-matrix": ["R1", "R2"],
+        "review-asset-mining": [],
+        "room-service-dispatch": ["R14"],
+        "maintenance-dispatch": [],
+        "ai-live-assistant": ["R15", "R2"],
+        "ota-operations": [],
+        "guest-profile-crm": [],
+        "phone-concierge": ["R9", "R13"],
+        "overbooking-parity-guard": ["R17", "R18", "R2"],
+        "incident-postmortem": ["R10"],
       };
       return {
         name: String(fm.name ?? d),
@@ -174,7 +197,7 @@ function loadSkills(): SkillDoc[] {
 /** 一店一档（bundles/hotel/schemas/archive.schema.json 对齐；保底价 ¥380 与 R2 同源） */
 function yunqiArchive(): Record<string, unknown> {
   return {
-    property: { name: WS_NAME, city: "杭州", rooms: 86, star: "四钻" },
+    property: { name: WS_NAME, city: "杭州", rooms: 86, star: "四钻", segment: "low_star_single", pms_vendor: "示例PMS" },
     // 数字CEO 宪章（D21，演示：董事长已完成深度授权 → 试用期第 2 天）
     charter: {
       version: 1,
@@ -185,7 +208,7 @@ function yunqiArchive(): Record<string, unknown> {
       briefing: { daily: "08:30", weekly: "Mon 09:00", monthly: "1st 10:00", channel: "both" },
       circuit_breaker: { window_days: 14, kpi_floor: { occ: 0.7 }, tightened: false },
       grant: {
-        event_id: "E-GRANT-DEMO01", granted_by: "MEM-001",
+        event_id: "E-SEED-GRANT01", granted_by: "MEM-001",
         granted_at: new Date(Date.now() - 9 * 86400e3).toISOString(),
         disclosure_version: "risk-v1",
         clauses: ["自主调价", "自主采购", "自主对外回复", "试用降档规则", "AI 非法律责任主体·授权人承担经营决策责任"],
@@ -199,6 +222,13 @@ function yunqiArchive(): Record<string, unknown> {
       tone: "真诚克制，不夸大、不承诺档案外补偿",
       banned_words: ["最低价全网保证", "百分百满意"],
       image_rules: "首图实拍、无水印、16:9",
+      live_rules: "直播口播不承诺最低价，专享价不低于保底价",
+    },
+    business: {
+      floor_price: 380,
+      price_bands: { "雅致大床房": [398, 688], "亲子双床房": [468, 788], "商旅大床房": [358, 588] },
+      commission_rules: { "美团": 0.10, "携程": 0.12, "飞猪": 0.08, "直连": 0 },
+      refund_policy: { free_cancel_hours: 18, guarantee_required_after: "18:00" },
     },
     competitors: [
       { name: "西湖云舍酒店", channels: ["美团", "携程"], price_band: [420, 680] },
@@ -212,6 +242,75 @@ function yunqiArchive(): Record<string, unknown> {
       "2026-08": { occ: 0.78, adr: 496, revpar: 387 },
     },
     sop: ["差评 24h 内响应", "调价须附竞对依据", "夜间对账三轮比对"],
+    channels: [
+      { name: "美团", kind: "ota", channel_new: false },
+      { name: "携程", kind: "ota", channel_new: false },
+      { name: "飞猪", kind: "ota", channel_new: false },
+      { name: "抖音", kind: "live", channel_new: true },
+      { name: "小红书", kind: "content", channel_new: true },
+    ],
+    price_calendar: {
+      horizon_days: 90,
+      holidays: [{ date: "2026-10-01", name: "国庆", strategy: "提前7天策略审批" }],
+    },
+    operations: {
+      shifts: ["早班 08:00-16:00", "中班 16:00-24:00", "夜班 00:00-08:00"],
+      night_window: { start: "22:00", end: "08:00", package_time: "08:30" },
+      inspection_cron: ["10:00", "15:00", "20:00"],
+      cleaning_sop: "预抵房>退房>续住房>空房；30-45分钟/间",
+      room_check_items: ["清洁", "设施", "耗材", "minibar", "损坏丢失"],
+    },
+    staffing: { frontdesk: 3, housekeeping: 3, maintenance: 1, overtime_legal_max_h_month: 36 },
+    suppliers: [
+      { name: "洁雅布草洗涤", kind: "linen", backup: false },
+      { name: "快捷酒店用品", kind: "consumable", backup: false },
+      { name: "顺达维修", kind: "maintenance", backup: true },
+    ],
+    goals: {
+      year: { revenue: 1_200_000, occ: 0.80, adr: 500, revpar: 400, bad_review_rate: 0.02, repurchase_rate: 0.28 },
+      month_2026_08: { revenue: 108_000, occ: 0.83, adr: 512, note: "暑期旺季冲刺" },
+      breakdown: { channels: { "美团": 0.38, "携程": 0.34, "飞猪": 0.16, "直连": 0.12 }, room_types: { "RT-DLX-KING": 0.45, "RT-FAM-TWIN": 0.33, "RT-BIZ-KING": 0.22 } },
+      tracking: "goal.tracking 事件按周回写达成率与偏差归因（p12 仪表盘数据源）",
+    },
+    approval_matrix: {
+      refund_review_threshold: 500,
+      procurement_review_threshold: 1000,
+      compensation: "review_only",
+      night_high_risk: "block",
+    },
+    compensation_policy: { max_goodwill_amount: 200, upgrade_promise: "forbidden", refund_channel: "reconcile-agent" },
+    memory: { case_index: [], note: "处置案例索引（第五类 case 记忆落地前的配置层锚点）" },
+    // v2.1 字段组 ×3（schemas/archive.schema.json 对齐）
+    linen: {
+      initial_sets: { 床单: 180, 被套: 180, 枕套: 360, 毛巾: 260, 浴巾: 180 },
+      laundry_vendor: "洁雅布草洗涤",
+      delivery_tolerance: 0.02,
+      baseline_loss_rate: 0.03,
+      rfid_enabled: false,
+    },
+    incident_profile: {
+      devices: [
+        { kind: "self_checkin_kiosk", model: "示例自助机 K2", warranty_until: "2027-06-30" },
+        { kind: "smart_lock", model: "示例门锁 L5", warranty_until: "2027-03-31" },
+      ],
+      emergency_contacts: [
+        { level: 1, name: "值班手机", phone: "138****0001" },
+        { level: 2, name: "远程店长 王店长", phone: "138****0002" },
+        { level: 3, name: "就近应急 顺达维修", phone: "138****0003" },
+      ],
+      alarm_integration: "烟感/门磁联动 110/119 自动报警",
+      backup_access: "前台保险柜机械钥匙 ×2（店长/业主各一）",
+      current_fallback_levels: { order_anomaly: "ai_first", identity_fail: "remote_video", safety_event: "alarm_only" },
+    },
+    faq_kb: {
+      top_questions: [
+        { q: "有停车场吗", a: "酒店地下两层免费停车，入口在云栖路辅道", source_call_ids: [], confirmed: true },
+        { q: "早餐几点", a: "06:30–10:00，一楼全日制餐厅", source_call_ids: [], confirmed: true },
+        { q: "几点退房", a: "12:00 前；延迟退房按半日房费，视房态确认", source_call_ids: [], confirmed: true },
+      ],
+      last_mined_at: null,
+      pending_candidates: [],
+    },
     // 巡检只读快照（M9/F9.1 探针输入；E1 补登：07:00 巡检真实检出——高危差评 + 中危价格/房态异常）
     inspection: {
       channels: [
@@ -552,7 +651,7 @@ async function main(): Promise<void> {
       ],
     );
   }
-  console.log(`✓ Agent 实例 ×${presets.length}（含只读 preset：巡检/竞对，L9.1）`);
+  console.log(`✓ Agent 实例 ×${presets.length}（含只读 preset：巡检/竞对/业主驾驶舱，L9.1）`);
 
   // 一店一档（槽①；forbidden 双写：archive 内 + 独立列，L1.6）
   // dataMode=simulated：落地向导（D24）横幅事实源——种子库即「全模拟运行态」，向导启用真实模式后翻转
@@ -565,14 +664,21 @@ async function main(): Promise<void> {
   );
   console.log("✓ 一店一档（含 forbidden 硬约束 ×2，保底价 ¥380 与 R2 同源）");
 
-  // 基线围栏装载（R1–R6，active；单调守卫 F2.3 由阶段二 B4 判定器执行）
+  // 基线围栏装载（R1–R20 v3，active；单调守卫 F2.3 由阶段二 B4 判定器执行）
+  // 版本化装载纪律：id 含版本 slug（重复 seed 不撞 pkey）；同 rule_id 的旧 active 版本滚动为 rolled_back，保证单一生效版本
+  const fenceVerSlug = FENCE_VERSION.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
   for (const r of fences) {
+    await q(
+      `UPDATE fence_rules SET status = 'rolled_back'
+       WHERE workspace_id = $1 AND rule_id = $2 AND version <> $3 AND status = 'active'`,
+      [WS_ID, r.rule_id, FENCE_VERSION],
+    );
     await q(
       `INSERT INTO fence_rules (id, rule_id, version, workspace_id, name, level, match_spec, action, is_baseline, status, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'active','system:seed')
-       ON CONFLICT (rule_id, version, workspace_id) DO NOTHING`,
+       ON CONFLICT (rule_id, version, workspace_id) DO UPDATE SET status = 'active', match_spec = EXCLUDED.match_spec, action = EXCLUDED.action`,
       [
-        `fr-${r.rule_id.toLowerCase()}-v1-${WS_ID}`,
+        `fr-${r.rule_id.toLowerCase()}-${fenceVerSlug}-${WS_ID}`,
         r.rule_id,
         FENCE_VERSION,
         WS_ID,
@@ -643,6 +749,11 @@ async function main(): Promise<void> {
   const triggers = [
     { id: "tg-inspection-0700", name: "每日 07:00 只读巡检", kind: "cron", schedule: "0 7 * * *", action: { dispatch: "inspection-agent", template: "inspection.daily" } },
     { id: "tg-night-2200", name: "夜班 22:00 战队出征", kind: "cron", schedule: "0 22 * * *", action: { dispatch: "night-shift", template: "night.run.start" } },
+    // v2.1 行业触发器 ×4（差评SLA/倒挂超售/FAQ萃取/断点周报）
+    { id: "tg-review-sla-30min", name: "差评 SLA 扫描（每 30 分钟，R19 联动）", kind: "cron", schedule: "*/30 * * * *", action: { dispatch: "review-agent", template: "review.sla.scan" } },
+    { id: "tg-parity-15min", name: "倒挂超售看门狗（每 15 分钟，R17/R18 联动）", kind: "cron", schedule: "*/15 * * * *", action: { dispatch: "competitor-agent", template: "channel.parity.scan" } },
+    { id: "tg-faq-mine-sun", name: "FAQ 知识库周萃取（周日 03:00）", kind: "cron", schedule: "0 3 * * *", action: { dispatch: "phone-agent", template: "faq.weekly.mine" } },
+    { id: "tg-incident-weekly", name: "断点率周报（周一 04:00）", kind: "cron", schedule: "0 4 * * 1", action: { dispatch: "desktop-agent", template: "incident.weekly.report" } },
     // 数字CEO 节拍（D21：CEO Loop；调度器消费前经治理守卫校验 charter.mode）
     { id: "tg-ceo-brief-0830", name: "公司CEO 晨报 08:30", kind: "cron", schedule: "30 8 * * *", action: { beat: "daily" } },
     { id: "tg-ceo-queue-2h", name: "公司CEO 裁决巡检 2h", kind: "cron", schedule: "7 */2 * * *", action: { beat: "queue" } },
@@ -656,7 +767,7 @@ async function main(): Promise<void> {
       [t.id, WS_ID, t.name, t.kind, t.schedule, JSON.stringify(t.action)],
     );
   }
-  console.log("✓ 触发器 ×6（巡检/夜班 + 公司CEO 节拍 ×4）");
+  console.log("✓ 触发器 ×10（巡检/夜班 + 行业 4 + 公司CEO 节拍 ×4）");
 
   // 演示线程（P1/P2 有数据可投影）
   const threads = [

@@ -1,6 +1,6 @@
 {
   "name": "@workloom/hotel",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "workloom": {
     "industry": "hotel",
     "displayName": "WorkLoom 酒店行业版",
@@ -17,7 +17,12 @@
         "presets/frontdesk-agent.yml",
         "presets/housekeeper-agent.yml",
         "presets/phone-agent.yml",
-        "presets/owner-cockpit.yml"
+        "presets/owner-cockpit.yml",
+        "presets/ai-receptionist.yml",
+        "presets/coupon-operator.yml",
+        "presets/guest-success.yml",
+        "presets/channel-watcher.yml",
+        "presets/company-ceo.yml"
       ],
       "fences": [
         "fences/hotel-baseline.yml",
@@ -50,7 +55,11 @@
         "skills/guest-profile-crm/SKILL.md",
         "skills/phone-concierge/SKILL.md",
         "skills/overbooking-parity-guard/SKILL.md",
-        "skills/incident-postmortem/SKILL.md"
+        "skills/incident-postmortem/SKILL.md",
+        "skills/lead-concierge/SKILL.md",
+        "skills/coupon-ops/SKILL.md",
+        "skills/hotel-geo-content/SKILL.md",
+        "skills/intent-radar/SKILL.md"
       ],
       "schemas": [
         "schemas/objects.json",
@@ -62,6 +71,12 @@
       ],
       "segment_defaults": [
         "segment-defaults.yml"
+      ],
+      "pipelines": [
+        "pipelines/hotel-acquisition-loop.yml"
+      ],
+      "connectors": [
+        "connectors/connectors.json"
       ]
     }
   }

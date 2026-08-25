@@ -7,7 +7,7 @@
 #   覆盖任务三七大业务域 67 环节的围栏诉求；阈值与一店一档 approval_matrix / business.floor_price 同源。
 # v3 变更：R1–R16 原样保留；新增 R17–R20（价格倒挂防护/超售防护/差评响应SLA/布草损耗异常），
 #   对应调研流失点：倒挂失控/超售漏售(15%)/差评响应慢(20%)/布草隐性成本；数据源为 OTA 巡检与消耗事件 params 入流。
-version: hotel-baseline/v3
+version: hotel-baseline/v4
 default_level: review
 rules:
   # ========== R1–R6：原基线（v1 保留，未做任何放宽） ==========
@@ -212,3 +212,65 @@ rules:
       actions: [inventory.loss]
     when: "params.loss_rate > params.baseline_loss_rate * 1.5"
     note: 损耗率超基线 1.5 倍（偷盗/丢失/洗涤异常）必审；基线由一店一档布草档案学习沉淀
+
+  # ================= 获客域（v3.3 新增 R21-R26：承接/转化/客资红线） =================
+
+  - rule_id: R21
+    name: AI 接待报价承诺必审
+    level: review
+    is_baseline: true
+    match:
+      object_types: [lead]
+      actions: [lead.reply, lead.quote]
+    when: "contains_any(params.body, ['特价', '优惠', '折', '最低价', '承诺', '保证']) || params.has_quote == true"
+    note: AI 接待答问留资自动，但房价/优惠/权益承诺一律人审（AI 不许私自报价）；口径以 price_calendar+一店一档为准
+
+  - rule_id: R22
+    name: 券库存熔断
+    level: block
+    is_baseline: true
+    match:
+      object_types: [coupon_sku]
+      actions: [coupon.publish, coupon.promote, coupon.promote.live]
+    when: "context.coupon_stock <= 0 || context.coupon_offline == true"
+    note: 售罄/下架后相关投放口播不停 → 熔断（防超卖投诉）；内容停投与 AI 话术切换联动执行
+
+  - rule_id: R23
+    name: 线索数据出域必审
+    level: review
+    is_baseline: true
+    match:
+      object_types: [lead]
+      actions: [lead.export, lead.share]
+    when: "true"
+    note: 客资出域（导出/外发/共享第三方）一律必审——客资是酒店最核心资产，去向必须留痕可追责
+
+  - rule_id: R24
+    name: 客资隐私红线
+    level: block
+    is_baseline: true
+    match:
+      object_types: [lead, member, guest]
+      actions: [lead.export, lead.bulk_message, member.export]
+    when: "params.desensitized == false || params.batch_size > 50"
+    note: 未脱敏客资明文批量导出直接熔断；客资明文不出系统边界（数据红线 R4 的获客域延伸）
+
+  - rule_id: R25
+    name: 获客内容口径校验
+    level: review
+    is_baseline: true
+    match:
+      object_types: [campaign, live_campaign]
+      actions: [campaign.publish, content.publish, live.script.review]
+    when: "params.fact_check_passed == false || params.caliber_mismatch == true"
+    note: 获客内容（短视频/直播脚本/GEO 图文）的房价/房型/权益口径必须与一店一档逐字一致；不一致或未经事实校验必审
+
+  - rule_id: R26
+    name: 券定价红线
+    level: block
+    is_baseline: true
+    match:
+      object_types: [coupon_sku]
+      actions: [coupon.create, coupon.adjust]
+    when: "params.price < context.floor_price * 0.85"
+    note: 券价低于保底价 0.85 倍直接熔断（R2 保底价熔断的获客域延伸；低价引流的底线是不可击穿成本结构）

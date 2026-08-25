@@ -27,7 +27,8 @@
     "db:seed:video": "tsx --env-file=.env scripts/seed-video.ts",
     "db:seed:geo": "tsx --env-file=.env scripts/seed-geo.ts",
     "suite:geo": "tsx --env-file=.env scripts/suite-geo.ts",
-    "release:gate": "tsx --env-file=.env scripts/release-gate.ts"
+    "release:gate": "tsx --env-file=.env scripts/release-gate.ts",
+    "suite:hotel": "tsx --env-file=.env scripts/suite-hotel.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

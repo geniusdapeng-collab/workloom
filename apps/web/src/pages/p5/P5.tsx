@@ -92,7 +92,7 @@ export default function P5() {
       return;
     }
     await trpc.fence.confirmDryRun.mutate({ dryRunId: report.dryRunId, rule: draft });
-    setBanner({ level: "info", text: `规则 ${draft.ruleId} 已进变更审批（${COMMON_STATUS_TEXT.pending_approval}，F2.4）——请去 P4 决断队列完成审批后激活` });
+    setBanner({ level: "info", text: `规则 ${draft.ruleId} 已进变更审批（${COMMON_STATUS_TEXT.pending_approval}，F2.4）——请去 P4 审批中心完成审批后激活` });
     setDraft(null); setReport(null); setNlText("");
     await load();
   }, [draft, report, load]);

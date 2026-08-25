@@ -1,9 +1,9 @@
 /**
- * P0 经营剧场（默认首页）——数字CEO 与数字团队的主界面
+ * P0 经营主页（默认首页）——数字CEO 与数字团队的主界面
  *
- * 界面三要素：形象（织元体全息CEO+员工卫星群）/ 实况（语音气泡+请示卡+实况字幕）/ 聊天框。
+ * 界面三要素：形象（数字CEO全息CEO+员工员工状态）/ 实况（语音气泡+请示卡+实况字幕）/ 聊天框。
  * 设计原则：剧场负责「感觉」，工作台（/p1…）负责「操作」；全部状态来自真实事件（captain.theater 5s 心跳）。
- * 形象纯 SVG+CSS+Canvas 零素材；仪式：每日首访开门礼（光核→光环→卫星逐亮→报到词）。
+ * 形象纯 SVG+CSS+Canvas 零素材；仪式：每日首访晨间播报（光核→光环→卫星逐亮→报到词）。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
@@ -52,7 +52,7 @@ function Starfield({ density = 110 }: { density?: number }) {
         st.y -= st.s; st.tw += 0.03;
         if (st.y < -4) { st.y = h + 4; st.x = Math.random() * w; }
         const a = 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(st.tw));
-        ctx.fillStyle = `rgba(255,120,150,${a})`; // 糖果星点（浅底珊瑚）
+        ctx.fillStyle = `rgba(255,120,150,${a})`;
         ctx.beginPath(); ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2); ctx.fill();
       }
       raf = requestAnimationFrame(tick);
@@ -63,7 +63,7 @@ function Starfield({ density = 110 }: { density?: number }) {
   return <canvas ref={ref} className="absolute inset-0 h-full w-full" />;
 }
 
-/* ================= 织元体全息 CEO ================= */
+/* ================= 数字CEO全息 CEO ================= */
 function Hologram({ tone, active }: { tone: "gold" | "holo" | "amber" | "red" | "grey"; active: boolean }) {
   const colors = {
     gold: ["#ffd98a", "#c8a24a"], holo: ["#8ad8ff", "#3a9ec8"],
@@ -104,7 +104,7 @@ function Hologram({ tone, active }: { tone: "gold" | "holo" | "amber" | "red" | 
   );
 }
 
-/* ================= 员工卫星群 ================= */
+/* ================= 员工员工状态 ================= */
 function Satellites({ agents, onPick }: { agents: Satellite[]; onPick: (a: Satellite) => void }) {
   const [t, setT] = useState(0);
   useEffect(() => {
@@ -162,9 +162,9 @@ export default function P0() {
   const [input, setInput] = useState("");
   const [chat, setChat] = useState<Array<{ from: "me" | "ceo"; text: string }>>([]);
   const [busy, setBusy] = useState(false);
-  const [ceremony, setCeremony] = useState(0); // 0=未演 1-4=开门礼阶段 5=完成
+  const [ceremony, setCeremony] = useState(0); // 0=未演 1-4=晨间播报阶段 5=完成
   const [msg, setMsg] = useState("");
-  // D25 视图：floor=数字职场（默认） / stage=剧场舞台（D23）
+  // D25 视图：floor=数字办公区（默认） / stage=剧场舞台（D23）
   const [view, setView] = useState<"floor" | "stage">(() =>
     (typeof localStorage !== "undefined" && localStorage.getItem("theater-view") === "stage") ? "stage" : "floor");
   const [askPick, setAskPick] = useState<FloorAgent | null>(null); // 职场请示卡弹层
@@ -247,10 +247,10 @@ export default function P0() {
       {/* 顶栏（极简） */}
       <header className="relative z-20 flex items-center gap-3 px-4 py-2.5">
         <span className="bg-gradient-to-r from-gold to-gold2 bg-clip-text font-bold text-transparent">视频经理</span>
-        <span className="text-xs text-ink3">经营剧场 · {data?.ceoName ?? "公司CEO"}</span>
+        <span className="text-xs text-ink3">经营主页 · {data?.ceoName ?? "公司CEO"}</span>
         <span className="flex-1" />
         {msg && <span className="text-xs text-go">{msg}</span>}
-        {/* D25 视图切换：职场=等距办公区 / 舞台=全息卫星群 */}
+        {/* D25 视图切换：职场=等距办公区 / 舞台=全息员工状态 */}
         <div className="flex overflow-hidden rounded border border-line text-[11px]">
           <button onClick={() => switchView("floor")} className={`px-2 py-0.5 ${view === "floor" ? "bg-gold/15 text-gold" : "text-ink3 hover:text-ink2"}`}>职场</button>
           <button onClick={() => switchView("stage")} className={`px-2 py-0.5 ${view === "stage" ? "bg-gold/15 text-gold" : "text-ink3 hover:text-ink2"}`}>舞台</button>
@@ -275,7 +275,7 @@ export default function P0() {
               <span>·</span><span className={data.floor.agents.some((a) => a.state === "asking") ? "text-amber-600" : ""}>{data.floor.agents.filter((a) => a.state === "asking").length} 请您定</span>
               <span>·</span><span>{data.floor.agents.filter((a) => a.state === "idle").length} 待命</span>
               <span className="flex-1" />
-              <span className="text-ink2">点员工看绩效 · 点举手者原地裁决</span>
+              <span className="text-ink2">点员工看绩效 · 点举手者原地审批</span>
             </div>
             <FloorView
               floor={data.floor}

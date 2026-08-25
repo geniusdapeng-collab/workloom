@@ -103,7 +103,7 @@ export function SquadRing({
   );
 }
 
-/** EquipSlot 装配槽（§6，仅 P7 舰船换装坞）：六边形槽位，已装配金光点亮，失败红边 */
+/** EquipSlot 装配槽（§6，仅 P7 装配中心）：六边形槽位，已装配金光点亮，失败红边 */
 export function EquipSlot({
   label,
   filled = false,
@@ -130,7 +130,7 @@ export function EquipSlot({
   );
 }
 
-/** EquipCard 装备稀有度边框（§6，仅 P6 装备库）：官方=金 / 团队=银 / 行业共享=铜 */
+/** EquipCard 装备稀有度边框（§6，仅 P6 技能中心）：官方=金 / 团队=银 / 行业共享=铜 */
 export function EquipCard({
   name,
   rarity,

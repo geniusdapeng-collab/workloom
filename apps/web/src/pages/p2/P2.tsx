@@ -136,7 +136,7 @@ export default function P2() {
     } else {
       await trpc.approvals.decide.mutate({ approvalId, gesture: g });
     }
-    setBanner({ level: "info", text: "决断已写回事件库并回流偏好记忆（F5.5/F1.7）" });
+    setBanner({ level: "info", text: "审批已写回事件库并回流偏好记忆（F5.5/F1.7）" });
     await load();
   }, [load]);
 
@@ -288,7 +288,7 @@ export default function P2() {
                   const text = ev.decision.action === "thread.dispatch"
                     ? (after?.title ?? thread.title)
                     : ev.decision.action === "approval.gesture"
-                      ? `舰长决断：${after?.gesture ?? "已处理"}`
+                      ? `待我审批：${after?.gesture ?? "已处理"}`
                       : actionText(ev.decision.action);
                   return <HumanBubble key={ev.event_id} time={new Date(ev.context.time).toTimeString().slice(0, 5)}>{text}</HumanBubble>;
                 }
@@ -339,7 +339,7 @@ export default function P2() {
                 <div key={a.approval_id} className={`rounded-msg border p-4 ${a.status === "pending" ? "border-warn/40 bg-warn/4" : "border-line bg-card"}`}>
                   <div className="mb-2 flex items-center gap-2">
                     <span className={`text-h2 font-bold ${a.status === "pending" ? "text-warn" : "text-ink2"}`}>
-                      ◆ 舰长决断 · {a.status === "pending" ? "待审查" : a.status === "approved" ? "已采纳" : a.status === "edited" ? "编辑后采纳" : a.status === "rejected" ? "已驳回" : "已过期"}
+                      ◆ 待我审批 · {a.status === "pending" ? "待审查" : a.status === "approved" ? "已采纳" : a.status === "edited" ? "编辑后采纳" : a.status === "rejected" ? "已驳回" : "已过期"}
                     </span>
                     <span className="font-mono text-micro text-ink3">{shortId(a.approval_id)}</span>
                     {a.snapshot.rule_version && <span className="font-mono text-micro text-holo">命中 {a.snapshot.rule_version}</span>}

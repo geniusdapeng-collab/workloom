@@ -1,5 +1,5 @@
 /**
- * Floor 数字职场（D25）——等距 2.5D 办公区 Canvas 渲染器
+ * Floor 数字办公区（D25）——等距 2.5D 办公区 Canvas 渲染器
  *
  * 纪律：零素材（纯 Canvas 程序化绘制）；员工每个动作来自 theater.floor 派生态（动作即数据）。
  * 渲染模型：逻辑网格 (x,y) → 等距屏幕坐标；员工位置逐帧插值（走位动画）；
@@ -304,7 +304,6 @@ function bubble(ctx: CanvasRenderingContext2D, sx: number, sy: number, text: str
   ctx.fillStyle = color; ctx.fillText(text, sx, sy + 2);
 }
 
-// 糖果浅底对比口径（D33）：浅色系头身色加深，保证员工在浅地板上轮廓清晰
 const SKIN: Record<string, [string, string]> = {
   working: ["#22c88a", "#0e7a4a"], asking: ["#4d96ff", "#2a6ac8"], blocked: ["#ffaa33", "#c87a1a"],
   celebrating: ["#4d96ff", "#2a6ac8"], collab: ["#b678ff", "#7a3ac8"], idle: ["#7a5c64", "#4a383e"], disabled: ["#666", "#444"],

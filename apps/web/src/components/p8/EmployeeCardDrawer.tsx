@@ -208,7 +208,7 @@ export function EmployeeCardDrawer({
             {profile === null ? (
               <div className="text-caption text-ink3">技能清单加载中…</div>
             ) : profile.skills.length === 0 ? (
-              <div className="text-caption text-ink3">暂无挂载技能（→P6 装备库安装）</div>
+              <div className="text-caption text-ink3">暂无挂载技能（→P6 技能中心安装）</div>
             ) : (
               <div className="space-y-1.5">
                 {profile.skills.map((s) => (
@@ -216,7 +216,7 @@ export function EmployeeCardDrawer({
                     key={s.id}
                     type="button"
                     onClick={() => nav("/p6")}
-                    title="技能 → P6 装备库"
+                    title="技能 → P6 技能中心"
                     className="flex w-full cursor-pointer items-center gap-2 rounded-lg border border-line bg-bg800/40 px-2.5 py-1.5 text-left text-caption hover:border-gline"
                   >
                     <span className="min-w-0 flex-1 truncate text-ink2">🎒 {s.name} <span className="font-mono text-micro text-ink3">v{s.version}</span></span>

@@ -50,7 +50,7 @@ function StarField() {
   );
 }
 
-/** HUD 四角金色刻度（原型 .frame::before/::after/.bc：18px·2px·贴边·随框架圆角） */
+/** HUD 四角金色刻度（原型 .frame::before/::after/.bc：18px·2px·贴边·随工作台圆角） */
 function CornerTicks() {
   const base = "pointer-events-none absolute h-[18px] w-[18px] border-2 border-gold z-10";
   return (
@@ -131,7 +131,7 @@ export function Bridge({
               {[
                 { id: "T-101", title: "保温杯种草片·三镜渲染", status: "running", cls: "text-holo" },
                 { id: "T-102", title: "抖音评论区差评分流", status: "pending_review", cls: "text-warn" },
-                { id: "T-103", title: "早八点账号战报", status: "completed", cls: "text-go" },
+                { id: "T-103", title: "早八点账号日报", status: "completed", cls: "text-go" },
               ].map((t) => (
                 <div
                   key={t.id}
@@ -165,7 +165,7 @@ export function Bridge({
         </div>
       </div>
 
-      {/* 星环 StarRing：全局 Ask 入口（所有页面生效；⌘K 唤起，双击进 /p0 剧场） */}
+      {/* AI 助手 StarRing：全局 Ask 入口（所有页面生效；⌘K 唤起，双击进 /p0 经营主页） */}
       <StarRing />
     </div>
   );

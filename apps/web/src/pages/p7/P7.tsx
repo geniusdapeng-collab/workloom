@@ -1,5 +1,5 @@
 /**
- * P7 舰船换装坞（F11：行业装配台 · 皮肤+通讯录+群规，底座特有；PRD P7-①②③④⑤ 逐条对账）
+ * P7 装配中心（F11：行业装配台 · 皮肤+通讯录+群规，底座特有；PRD P7-①②③④⑤ 逐条对账）
  *  - P7E1 六槽位卡：档案 Schema/对象阶段/工具集/围栏包/Agent 班组/工作台 UI，逐卡显装配状态
  *    （底座代码零改动；行业 Bundle = npm 包 §2.3；围栏包→P5、班组→P8 回链）
  *  - P7E2 Agent 班组卡：preset 清单与围栏绑定校验状态；未声明 fence_bindings 即系统级禁写（F2.10）；点击 →P8
@@ -138,7 +138,7 @@ export default function P7() {
     <Bridge
       left={
         <>
-          <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">换装坞 · DOCK</div>
+          <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">装配中心 · DOCK</div>
           {[
             ["#sec-profiles", "🛰 Profile 切换器", `${data?.profiles.length ?? 0} 套注册`],
             ["#sec-slots", "🧩 六装配槽", selected ? `${selected.filledCount}/6 已装配` : "—"],
@@ -179,7 +179,7 @@ export default function P7() {
     >
       <div className="px-1">
         <div className="mb-4 flex items-baseline gap-3">
-          <h2 className="text-[20px] font-black text-ink">舰船换装坞</h2>
+          <h2 className="text-[20px] font-black text-ink">装配中心</h2>
           <span className="text-caption text-ink3">行业装配台 · 换行业=换成员/群规/皮肤</span>
           <span className="font-mono text-micro text-ink3">§2.2 · F2.10</span>
         </div>

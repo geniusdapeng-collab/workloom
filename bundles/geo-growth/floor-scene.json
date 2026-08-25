@@ -2,10 +2,10 @@
   "id": "geo-war-room",
   "name": "WorkLoom GEO · 双域作战室",
   "theme": {
-    "floorA": "#1c2430",
-    "floorB": "#121822",
-    "wall": "#2c3a4e",
-    "accent": "#4fd1c5",
+    "floorA": "#c8e6ff",
+    "floorB": "#e0f1ff",
+    "wall": "#a8d4f5",
+    "accent": "#4d96ff",
     "night": false
   },
   "grid": {

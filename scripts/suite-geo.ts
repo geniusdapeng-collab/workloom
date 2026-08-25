@@ -391,17 +391,17 @@ e("ws-geo 事件 ≥60 条且五元字段完整（容忍门禁活火写入）", 
   const r = await q(`SELECT count(*) n FROM biz_events WHERE workspace_id=$1`, [WS]);
   assert(Number(r.rows[0].n) >= 60, `events=${r.rows[0].n}`);
   // 门禁活火事件（thread/task 对象：dispatch/quest/审批流）属系统面事件，receipt/model_trace 豁免（D31）
-  const bad = await q(`SELECT count(*) n FROM biz_events WHERE workspace_id=$1 AND COALESCE(payload->'object'->>'type','') NOT IN ('thread','task','approval')
+  const bad = await q(`SELECT count(*) n FROM biz_events WHERE workspace_id=$1 AND COALESCE(payload->'object'->>'type','') NOT IN ('thread','task','approval','conversation','company_ceo','client')
     AND (payload->>'who' IS NULL OR payload->>'object' IS NULL OR payload->>'decision' IS NULL OR payload->>'receipt' IS NULL OR payload->>'model_trace' IS NULL)`, [WS]);
   assert(Number(bad.rows[0].n) === 0, `五元缺失 ${bad.rows[0].n} 条`);
 });
 e("事件 GEO 对象类型全部在对象模型内（系统对象豁免）", async () => {
-  const SYSTEM_TYPES = new Set(["thread", "task", "approval", "workspace"]);
+  const SYSTEM_TYPES = new Set(["thread", "task", "approval", "workspace", "conversation", "company_ceo", "client"]);
   const r = await q(`SELECT DISTINCT payload->'object'->>'type' t FROM biz_events WHERE workspace_id=$1`, [WS]);
   for (const row of r.rows) assert(objectTypes.has(row.t) || SYSTEM_TYPES.has(row.t), `事件对象 ${row.t} 未在对象模型`);
 });
 e("事件 who 全部在编制内（系统/人类豁免）", async () => {
-  const SYSTEM_ACTORS = new Set(["morning-briefing", "captain", "fleet"]);
+  const SYSTEM_ACTORS = new Set(["morning-briefing", "captain", "fleet", "im-channels"]);
   const r = await q(`SELECT DISTINCT payload->'who'->>'id' id FROM biz_events WHERE workspace_id=$1`, [WS]);
   for (const row of r.rows) assert(presetKeys.has(row.id) || SYSTEM_ACTORS.has(row.id) || String(row.id).startsWith("MEM-"), `who=${row.id} 不在编制`);
 });

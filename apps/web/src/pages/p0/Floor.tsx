@@ -102,7 +102,7 @@ export function FloorView({
       ctx.moveTo(p0.sx, p0.sy); ctx.lineTo(p1.sx, p1.sy); ctx.lineTo(p2.sx, p2.sy); ctx.lineTo(p3.sx, p3.sy);
       ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
       ctx.strokeStyle = scene.theme.wall; ctx.lineWidth = 2; ctx.stroke();
-      ctx.strokeStyle = "rgba(255,255,255,.05)"; ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgba(51,38,43,.07)"; ctx.lineWidth = 1;
       for (let i = 1; i < gw; i++) { const a = iso(i, 0), b = iso(i, gh); ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke(); }
       for (let j = 1; j < gh; j++) { const a = iso(0, j), b = iso(gw, j); ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke(); }
 
@@ -178,7 +178,7 @@ export function FloorView({
       ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(cd.sx, cd.sy - 18, 26 * pulse, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = "#ffd98a"; ctx.lineWidth = 1.4;
       ctx.beginPath(); ctx.ellipse(cd.sx, cd.sy - 20, 6, 9, 0, 0, Math.PI * 2); ctx.stroke();
-      ctx.fillStyle = "#ffd98a"; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "center";
+      ctx.fillStyle = "#d4002a"; ctx.font = "bold 9px sans-serif"; ctx.textAlign = "center";
       ctx.fillText(ceoName, cd.sx, cd.sy + 14);
 
       /* 员工：更新目标 + 插值走位（先清理已离场员工的运行时，防泄漏） */
@@ -231,13 +231,13 @@ export function FloorView({
         roundRect(ctx, sx - lw / 2, sy + 6, lw, 12, 6); ctx.fill();
         ctx.fillStyle = "#e8e8f0"; ctx.fillText(label, sx, sy + 15);
         if (a.state === "asking") {
-          bubble(ctx, sx, sy - 46, a.pendingTier === "l4_chairman" ? "请您定（董事长级）" : "请您定", "#ffbe6a");
+          bubble(ctx, sx, sy - 46, a.pendingTier === "l4_chairman" ? "请您定（董事长级）" : "请您定", "#e8890c");
           // 聚光灯
           const sp = ctx.createRadialGradient(sx, sy, 2, sx, sy, 30);
           sp.addColorStop(0, "rgba(255,190,106,.28)"); sp.addColorStop(1, "rgba(255,190,106,0)");
           ctx.fillStyle = sp; ctx.beginPath(); ctx.ellipse(sx, sy, 30, 14, 0, 0, Math.PI * 2); ctx.fill();
         } else if (a.state === "blocked") {
-          bubble(ctx, sx, sy - 46, "!", "#ffbe6a");
+          bubble(ctx, sx, sy - 46, "!", "#e8890c");
         } else if (a.state === "working" && a.currentThread) {
           ctx.fillStyle = "#6adf8a"; ctx.font = "8px sans-serif";
           const dots = "▮".repeat(1 + (Math.floor(now * 2 + rt.phase) % 3));

@@ -1,5 +1,5 @@
 {
-  "name": "workloom-geo",
+  "name": "workloom-ai-acquisition",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -43,5 +43,5 @@
     "vitest": "^3.2.0",
     "yaml": "2.9.0"
   },
-  "description": "WorkLoom GEO 项目 · 社媒短视频营销 × GEO 双域融合经营系统（AI 视频制作智能经营底座 + GEO 生成式引擎优化双引擎）"
+  "description": "WorkLoom AI 获客系统 · 短视频社媒营销 × GEO × 获客五环 × 行业运营（首垂直：酒店）"
 }

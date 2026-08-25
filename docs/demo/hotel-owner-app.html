@@ -6,17 +6,17 @@
 <title>云栖酒店 · 店长驾驶舱（演示原型）</title>
 <style>
   :root {
-    --bg: #0d0b08; --card: #181410; --card2: #211a13;
-    --gold: #e8b45a; --gold2: #c98f33;
-    --ink: #f2ead9; --ink2: #b8ab93; --ink3: #7d7260;
-    --teal: #4ec9a7; --red: #e5636a; --blue: #6aa9e8; --line: #2c2419;
+    --bg: #fff5f7; --card: #ffffff; --card2: #fff0f4;
+    --gold: #ff2442; --gold2: #ff7a9e;
+    --ink: #33262b; --ink2: #8a757d; --ink3: #b9a9b0;
+    --teal: #22c88a; --red: #ff4d6d; --blue: #6aa9e8; --line: #ffe0ea;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body { background: #05070d; color: var(--ink); font-family: -apple-system, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", sans-serif; display: flex; justify-content: center; }
+  body { background: #ffeef3; color: var(--ink); font-family: -apple-system, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", sans-serif; display: flex; justify-content: center; }
   .phone { width: 100%; max-width: 420px; min-height: 100vh; background: var(--bg); }
   .statusbar { display: flex; justify-content: space-between; padding: 14px 20px 4px; font-size: 12px; color: var(--ink3); }
   .apphead { display: flex; align-items: center; gap: 10px; padding: 8px 20px 14px; }
-  .logo { width: 42px; height: 42px; border-radius: 12px; background: linear-gradient(135deg, var(--gold), var(--gold2)); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; color: #1a1206; }
+  .logo { width: 42px; height: 42px; border-radius: 12px; background: linear-gradient(135deg, var(--gold), var(--gold2)); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; color: #ffffff; }
   .t1 { font-size: 16px; font-weight: 700; } .t2 { font-size: 11px; color: var(--ink3); margin-top: 2px; }
   .live-dot { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--teal); }
   .live-dot::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 8px var(--teal); animation: pulse 2s infinite; }
@@ -33,7 +33,7 @@
   .tag.red { color: var(--red); border-color: var(--red); }
   .tag.gold { color: var(--gold); border-color: var(--gold2); }
   .tag.teal { color: var(--teal); border-color: var(--teal); }
-  .btn { display: block; width: 100%; text-align: center; padding: 12px; border-radius: 12px; background: linear-gradient(135deg, var(--gold), var(--gold2)); color: #1a1206; font-weight: 700; font-size: 14px; border: none; cursor: pointer; }
+  .btn { display: block; width: 100%; text-align: center; padding: 12px; border-radius: 12px; background: linear-gradient(135deg, var(--gold), var(--gold2)); color: #ffffff; font-weight: 700; font-size: 14px; border: none; cursor: pointer; }
   .kpis { display: flex; gap: 8px; margin-bottom: 12px; }
   .kpi { flex: 1; background: var(--card2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 4px; text-align: center; }
   .kpi b { font-size: 17px; display: block; }
@@ -41,16 +41,16 @@
   .kpi .up { color: var(--teal); font-size: 10px; } .kpi .dn { color: var(--red); font-size: 10px; }
   .funnel-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; }
   .funnel-row .lb { width: 40px; color: var(--ink2); text-align: right; }
-  .funnel-row .bar { height: 18px; border-radius: 4px; background: linear-gradient(90deg, var(--gold2), var(--gold)); display: flex; align-items: center; padding-left: 6px; font-size: 10px; color: #1a1206; font-weight: 700; min-width: 34px; }
+  .funnel-row .bar { height: 18px; border-radius: 4px; background: linear-gradient(90deg, var(--gold2), var(--gold)); display: flex; align-items: center; padding-left: 6px; font-size: 10px; color: #ffffff; font-weight: 700; min-width: 34px; }
   .funnel-row .pct { color: var(--ink3); font-size: 10px; margin-left: auto; }
   .lead { border-left: 3px solid var(--gold2); }
   .lead.a { border-left-color: var(--red); }
   .lead.b { border-left-color: var(--gold); }
   .lead.c { border-left-color: var(--ink3); }
-  .apr { border: 1px solid var(--gold2); background: rgba(232,180,90,.05); }
+  .apr { border: 1px solid var(--gold2); background: rgba(255,36,66,.04); }
   .apr .acts { display: flex; gap: 8px; margin-top: 10px; }
   .apr .acts button { flex: 1; padding: 9px; border-radius: 10px; border: none; font-weight: 700; cursor: pointer; font-size: 13px; }
-  .ok-b { background: var(--teal); color: #06231b; }
+  .ok-b { background: var(--teal); color: #ffffff; }
   .no-b { background: var(--card2); color: var(--red); border: 1px solid var(--red) !important; }
   .agent-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
   .agent { background: var(--card2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 4px; text-align: center; }
@@ -59,7 +59,7 @@
   .agent .st { font-size: 9px; color: var(--teal); }
   .agent.busy .st { color: var(--gold); }
   .group-t { font-size: 12px; color: var(--ink3); margin: 12px 0 8px; }
-  .tabbar { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 420px; display: flex; background: rgba(13,11,8,.96); border-top: 1px solid var(--line); backdrop-filter: blur(8px); }
+  .tabbar { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 420px; display: flex; background: rgba(255,255,255,.96); border-top: 1px solid var(--line); backdrop-filter: blur(8px); }
   .tab { flex: 1; text-align: center; padding: 9px 0 14px; font-size: 10px; color: var(--ink3); cursor: pointer; }
   .tab .ic { font-size: 19px; display: block; margin-bottom: 2px; }
   .tab.on { color: var(--gold); }
@@ -88,7 +88,7 @@
       <div class="kpi"><b>¥512</b><span>ADR</span><div class="up">▲¥16</div></div>
       <div class="kpi"><b>¥425</b><span>RevPAR</span><div class="up">▲9.2%</div></div>
     </div>
-    <div class="card" style="border-color:var(--gold2);background:linear-gradient(135deg,rgba(232,180,90,.12),transparent);">
+    <div class="card" style="border-color:var(--gold2);background:linear-gradient(135deg,rgba(255,36,66,.08),transparent);">
       <div class="between"><b class="small">💰 本月获客归因成交</b><span class="tag gold">北极星</span></div>
       <div style="font-size:24px;font-weight:800;margin:6px 0">¥23,896 <span class="tiny teal">31 单 · 直连+券</span></div>
       <div class="tiny dim">同单走 OTA 应付佣金 <span class="red">¥2,628.60</span> —— 这就是省下的纯利</div>

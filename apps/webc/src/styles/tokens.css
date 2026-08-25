@@ -1,36 +1,41 @@
 /**
- * C 端「AI 服务前台」设计令牌（默认主题：深空底 #0a1230 + 暗金 #e9b558，可在 service-front.config.json 换色）
- * 与 B 端舰桥同族视觉：深空底 #0a1230 + 酒店金 #e9b558
+ * C 端「AI 服务前台」设计令牌（默认主题：糖果色系 #fff5f7 + 珊瑚红 #ff2442（默认主题，可在 service-front.config.json 换色））
+ * 与 B 端同族视觉：糖果浅底 + 珊瑚红主色
  * Tailwind v4 令牌制：只写 @theme，无 tailwind.config.js
  */
 @import "tailwindcss";
 
 @theme {
-  /* 深空底（移动端页面 → 卡片 → 浮层） */
-  --color-bg950: #04060f;
-  --color-bg900: #050a1a;
-  --color-bg800: #0a1230;
-  --color-bg700: #121e45;
-  /* 酒店金（行动/奖励/会员）+ 金高光 + 金底文字 */
-  --color-gold: #e9b558;
-  --color-gold2: #d69a3a;
-  --color-goldhi: #ffe0a3;
-  --color-ongold: #2a1500;
-  /* 全息青（信息/引用证据） */
-  --color-holo: #45e0ff;
-  --color-holo2: #2fa8ff;
-  /* 语义色 */
-  --color-go: #3dffb2;
-  --color-warn: #ffc24d;
-  --color-alert: #ff5470;
-  /* 文字三级 */
-  --color-ink: #eaf1ff;
-  --color-ink2: #9db2dc;
-  --color-ink3: #5e7099;
+  /* ===== 色板 · 糖果色系（小红书式年轻时尚） ===== */
+  /* 糖果四阶（页面奶莓 → 卡片云白 → 浮层蜜桃雾 → 悬停樱花粉） */
+  --color-bg950: #fff5f7;
+  --color-bg900: #ffffff;
+  --color-bg800: #fff0f4;
+  --color-bg700: #ffe4ec;
+  /* 糖果晕染对 */
+  --color-nebula: #ffe0ec;
+  --color-nebula2: #e8e0ff;
+  /* 珊瑚主色（行动/奖励） */
+  --color-gold: #ff2442;
+  --color-gold2: #ff7a9e;
+  --color-goldhi: #d4002a;
+  --color-ongold: #ffffff;
+  /* 蓝莓信息色 */
+  --color-holo: #4d96ff;
+  --color-holo2: #6ec6ff;
+  /* 语义四色：薄荷绿/蜜桃橙/草莓红/葡萄紫 */
+  --color-go: #22c88a;
+  --color-warn: #ffaa33;
+  --color-alert: #ff4d6d;
+  --color-need: #b678ff;
+  /* 可可文字三级 */
+  --color-ink: #33262b;
+  --color-ink2: #8a757d;
+  --color-ink3: #b9a9b0;
   /* 卡片与描线 */
-  --color-card: rgb(13 22 52 / 0.72);
-  --color-line: rgb(96 140 255 / 0.22);
-  --color-gline: rgb(233 181 88 / 0.45);
+  --color-card: rgb(255 255 255 / 0.88);
+  --color-line: rgb(255 36 66 / 0.14);
+  --color-gline: rgb(255 36 66 / 0.32);
 
   --font-sans: "PingFang SC", "Microsoft YaHei", "Source Han Sans SC", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;

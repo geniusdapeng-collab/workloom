@@ -7,13 +7,13 @@
 <style>
 /* ===== 设计令牌：逐值镜像 apps/web/src/styles/tokens.css（§2.1 色板 / §3 字体 / §4.1 布局） ===== */
 :root{
-  --bg950:#04060f; --bg900:#050a1a; --bg800:#0a1230; --bg700:#121e45;
-  --nebula:#241b4d; --nebula2:#3a2a6e;
-  --gold:#ffb545; --gold2:#ff8a3d; --goldhi:#ffe0a3; --ongold:#2a1500;
-  --holo:#45e0ff; --holo2:#2fa8ff;
-  --go:#3dffb2; --warn:#ffc24d; --alert:#ff5470; --need:#b45cff;
-  --ink:#eaf1ff; --ink2:#9db2dc; --ink3:#5e7099;
-  --card:rgba(13,22,52,.72); --line:rgba(96,140,255,.22); --gline:rgba(255,181,69,.45);
+  --bg950:#fff5f7; --bg900:#ffffff; --bg800:#fff0f4; --bg700:#ffe4ec;
+  --nebula:#ffe0ec; --nebula2:#e8e0ff;
+  --gold:#ff2442; --gold2:#ff7a9e; --goldhi:#ffc2d4; --ongold:#ffffff;
+  --holo:#4d96ff; --holo2:#6ec6ff;
+  --go:#22c88a; --warn:#ffaa33; --alert:#ff4d6d; --need:#b678ff;
+  --ink:#33262b; --ink2:#8a757d; --ink3:#b9a9b0;
+  --card:rgba(255,255,255,.88); --line:rgba(255,36,66,.14); --gline:rgba(255,36,66,.32);
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg950);color:var(--ink);font-family:"PingFang SC","Microsoft YaHei","Source Han Sans SC",sans-serif;font-size:13.5px;min-height:100vh;overflow-x:hidden}
@@ -308,7 +308,7 @@ table.ftab{width:100%;border-collapse:collapse;font-size:12px}
 .vswt{display:inline-flex;overflow:hidden;border:1px solid var(--line);border-radius:7px;font-size:10.5px;flex-shrink:0}
 .vswt button{border:none;background:none;color:var(--ink3);padding:3px 10px;cursor:pointer;font-family:inherit;font-size:10.5px}
 .vswt button.on{background:rgba(255,181,69,.14);color:var(--gold);font-weight:700}
-.theater{position:relative;border:1px solid var(--line);background:#07070d;border-radius:14px;overflow:hidden;min-height:640px;display:flex;flex-direction:column}
+.theater{position:relative;border:1px solid var(--line);background:#fff5f7;border-radius:14px;overflow:hidden;min-height:640px;display:flex;flex-direction:column}
 .th-stars{position:absolute;inset:0;pointer-events:none;background:radial-gradient(60% 45% at 18% 8%,rgba(36,27,77,.55),transparent 70%),radial-gradient(50% 40% at 85% 20%,rgba(58,42,110,.38),transparent 70%),radial-gradient(70% 50% at 50% 110%,rgba(36,27,77,.45),transparent 70%)}
 .th-dots{position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(1px 1px at 12% 22%,rgba(234,241,255,.8) 50%,transparent 51%),radial-gradient(1px 1px at 34% 68%,rgba(234,241,255,.5) 50%,transparent 51%),radial-gradient(1.5px 1.5px at 57% 15%,rgba(69,224,255,.6) 50%,transparent 51%),radial-gradient(1px 1px at 72% 47%,rgba(234,241,255,.7) 50%,transparent 51%),radial-gradient(1px 1px at 88% 78%,rgba(234,241,255,.45) 50%,transparent 51%),radial-gradient(1.5px 1.5px at 25% 88%,rgba(255,181,69,.5) 50%,transparent 51%),radial-gradient(1px 1px at 45% 40%,rgba(234,241,255,.55) 50%,transparent 51%),radial-gradient(1px 1px at 66% 90%,rgba(234,241,255,.6) 50%,transparent 51%),radial-gradient(1px 1px at 94% 10%,rgba(234,241,255,.5) 50%,transparent 51%),radial-gradient(1.5px 1.5px at 8% 55%,rgba(69,224,255,.4) 50%,transparent 51%)}
 .th-main{position:relative;z-index:2;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:10px 16px 12px}
@@ -356,7 +356,7 @@ table.ftab{width:100%;border-collapse:collapse;font-size:12px}
 @media(min-width:640px){.th-chip{display:block}}
 .th-chat input{flex:1;min-width:0;background:var(--bg900);border:1px solid var(--line);border-radius:999px;padding:8px 14px;color:var(--ink);font-size:12px;outline:none}
 .th-chat input:focus{border-color:var(--gline)}
-.th-cer{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:#07070d;transition:opacity .7s;text-align:center}
+.th-cer{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:#fff5f7;transition:opacity .7s;text-align:center}
 .th-cer .cdot{width:12px;height:12px;border-radius:50%;background:#ffd98a;margin:0 auto 16px;transition:all .7s}
 .th-cer.s2 .cdot{transform:scale(3);box-shadow:0 0 60px #ffd98a}
 .th-cer .ct1{font-size:13px;letter-spacing:.3em;color:var(--gold);opacity:0;transition:opacity .7s}
@@ -419,9 +419,9 @@ table.ftab{width:100%;border-collapse:collapse;font-size:12px}
     <div class="logo">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <rect x="2.5" y="8" width="19" height="12.5" rx="2.2" fill="#c9922e"/>
-        <path d="M3.2 5.4 20.6 3.2l.5 2.6L3.7 8z" fill="#e9b558"/>
+        <path d="M3.2 5.4 20.6 3.2l.5 2.6L3.7 8z" fill="#ff2442"/>
         <path d="M6.4 4.9l2 2.2M10.6 4.5l2 2.2M14.8 4l2 2.2" stroke="#7a5410" stroke-width="1.1"/>
-        <path d="M10.2 11.4v5.6l4.8-2.8z" fill="#1b1206"/>
+        <path d="M10.2 11.4v5.6l4.8-2.8z" fill="#ffffff"/>
       </svg>
       <span class="nm">视频经理</span>
     </div>
@@ -1270,10 +1270,10 @@ table.ftab{width:100%;border-collapse:collapse;font-size:12px}
 <button class="star-ring has-pending" id="starRing" title="星环 · 全局 Ask（⌘K 唤起 · 双击进剧场）">
   <span class="halo"></span>
   <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <rect x="2.5" y="8" width="19" height="12.5" rx="2.2" fill="#2a1500"/>
-    <path d="M3.2 5.4 20.6 3.2l.5 2.6L3.7 8z" fill="#2a1500"/>
-    <path d="M6.4 4.9l2 2.2M10.6 4.5l2 2.2M14.8 4l2 2.2" stroke="#ffb545" stroke-width="1.1"/>
-    <path d="M10.2 11.4v5.6l4.8-2.8z" fill="#ffb545"/>
+    <rect x="2.5" y="8" width="19" height="12.5" rx="2.2" fill="#ffffff"/>
+    <path d="M3.2 5.4 20.6 3.2l.5 2.6L3.7 8z" fill="#ffffff"/>
+    <path d="M6.4 4.9l2 2.2M10.6 4.5l2 2.2M14.8 4l2 2.2" stroke="#ff2442" stroke-width="1.1"/>
+    <path d="M10.2 11.4v5.6l4.8-2.8z" fill="#ff2442"/>
   </svg>
   <span class="rbadge" id="ringBadge">2</span>
 </button>
@@ -1598,7 +1598,7 @@ const FCOL={working:"#6adf8a",asking:"#8ad8ff",blocked:"#ffbe6a",celebrating:"#e
 function renderFloor(){
   const TW=64,TH=32,CX=390,CY=84;
   const iso=(x,y)=>[CX+(x-y)*TW/2,CY+(x+y)*TH/2];
-  let s=`<defs><linearGradient id="flGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#26262e"/><stop offset="1" stop-color="#16161c"/></linearGradient>
+  let s=`<defs><linearGradient id="flGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe4ec"/><stop offset="1" stop-color="#fff0f4"/></linearGradient>
   <radialGradient id="ceoGlow"><stop offset="0" stop-color="rgba(255,217,138,.85)"/><stop offset="1" stop-color="rgba(255,217,138,0)"/></radialGradient>
   <radialGradient id="spot"><stop offset="0" stop-color="rgba(255,190,106,.28)"/><stop offset="1" stop-color="rgba(255,190,106,0)"/></radialGradient></defs>`;
   // 地板菱形 + 网格
@@ -1608,16 +1608,16 @@ function renderFloor(){
     const c=iso(0,i),d=iso(8,i);s+=`<line x1="${c[0]}" y1="${c[1]}" x2="${d[0]}" y2="${d[1]}" stroke="rgba(255,255,255,.05)"/>`}
   // 工位
   for(const st of FSCENE.stations){const[x,y]=iso(st.x,st.y);
-    if(st.kind==="monitor"){s+=`<g><rect x="${x-14}" y="${y-26}" width="28" height="18" rx="2" fill="#101018" stroke="#4a4a66"/><rect x="${x-10}" y="${y-22}" width="8" height="2" fill="#6adf8a" opacity=".7"/><rect x="${x-10}" y="${y-18}" width="14" height="2" fill="#6adf8a" opacity=".7"/><line x1="${x}" y1="${y-8}" x2="${x}" y2="${y}" stroke="#4a4a66"/></g>`}
+    if(st.kind==="monitor"){s+=`<g><rect x="${x-14}" y="${y-26}" width="28" height="18" rx="2" fill="#fff5f7" stroke="#4a4a66"/><rect x="${x-10}" y="${y-22}" width="8" height="2" fill="#6adf8a" opacity=".7"/><rect x="${x-10}" y="${y-18}" width="14" height="2" fill="#6adf8a" opacity=".7"/><line x1="${x}" y1="${y-8}" x2="${x}" y2="${y}" stroke="#4a4a66"/></g>`}
     else if(st.kind==="bench"){s+=`<rect x="${x-16}" y="${y-8}" width="32" height="10" rx="4" fill="#3a5a6a"/>`}
-    else{s+=`<g><rect x="${x-16}" y="${y-8}" width="32" height="10" rx="2" fill="#38384c"/><rect x="${x-16}" y="${y-10}" width="32" height="4" rx="2" fill="#2a2a3a"/><rect x="${x-6}" y="${y-20}" width="14" height="10" rx="1.5" fill="#101018"/><rect x="${x-4}" y="${y-18}" width="10" height="2" fill="#45e0ff" opacity=".55"/><rect x="${x-4}" y="${y-15}" width="6" height="2" fill="#45e0ff" opacity=".55"/></g>`}}
+    else{s+=`<g><rect x="${x-16}" y="${y-8}" width="32" height="10" rx="2" fill="#38384c"/><rect x="${x-16}" y="${y-10}" width="32" height="4" rx="2" fill="#ffd9e2"/><rect x="${x-6}" y="${y-20}" width="14" height="10" rx="1.5" fill="#fff5f7"/><rect x="${x-4}" y="${y-18}" width="10" height="2" fill="#4d96ff" opacity=".55"/><rect x="${x-4}" y="${y-15}" width="6" height="2" fill="#4d96ff" opacity=".55"/></g>`}}
   // 道具
   for(const pr of FSCENE.props){const[x,y]=iso(pr.x,pr.y);
-    if(pr.kind==="greenscreen")s+=`<rect x="${x-20}" y="${y-26}" width="40" height="26" rx="2" fill="#1a6a3a"/>`;
-    else if(pr.kind==="camera")s+=`<g><rect x="${x-9}" y="${y-14}" width="18" height="12" rx="2" fill="#2a2a3a"/><circle cx="${x}" cy="${y-8}" r="4" fill="#101018"/><line x1="${x}" y1="${y-2}" x2="${x-6}" y2="${y+8}" stroke="#8a8a9a"/><line x1="${x}" y1="${y-2}" x2="${x+6}" y2="${y+8}" stroke="#8a8a9a"/></g>`;
+    if(pr.kind==="greenscreen")s+=`<rect x="${x-20}" y="${y-26}" width="40" height="26" rx="2" fill="#1aa583"/>`;
+    else if(pr.kind==="camera")s+=`<g><rect x="${x-9}" y="${y-14}" width="18" height="12" rx="2" fill="#ffd9e2"/><circle cx="${x}" cy="${y-8}" r="4" fill="#fff5f7"/><line x1="${x}" y1="${y-2}" x2="${x-6}" y2="${y+8}" stroke="#8a8a9a"/><line x1="${x}" y1="${y-2}" x2="${x+6}" y2="${y+8}" stroke="#8a8a9a"/></g>`;
     else if(pr.kind==="light")s+=`<g><polygon points="${x},${y-26} ${x-10},${y} ${x+10},${y}" fill="rgba(255,217,138,.16)"/><rect x="${x-2}" y="${y-30}" width="4" height="30" fill="#3a3a4a"/></g>`;
-    else if(pr.kind==="clapper")s+=`<g><rect x="${x-8}" y="${y-12}" width="16" height="12" rx="2" fill="#2a2a3a"/><rect x="${x-8}" y="${y-12}" width="3" height="4" fill="#e8e8f0"/><rect x="${x-2}" y="${y-12}" width="3" height="4" fill="#e8e8f0"/><rect x="${x+4}" y="${y-12}" width="3" height="4" fill="#e8e8f0"/></g>`;
-    else if(pr.kind==="plant")s+=`<g><ellipse cx="${x}" cy="${y-6}" rx="7" ry="9" fill="#2a5a3a"/><rect x="${x-4}" y="${y}" width="8" height="5" fill="#6a4a2a"/></g>`;
+    else if(pr.kind==="clapper")s+=`<g><rect x="${x-8}" y="${y-12}" width="16" height="12" rx="2" fill="#ffd9e2"/><rect x="${x-8}" y="${y-12}" width="3" height="4" fill="#e8e8f0"/><rect x="${x-2}" y="${y-12}" width="3" height="4" fill="#e8e8f0"/><rect x="${x+4}" y="${y-12}" width="3" height="4" fill="#e8e8f0"/></g>`;
+    else if(pr.kind==="plant")s+=`<g><ellipse cx="${x}" cy="${y-6}" rx="7" ry="9" fill="#b8e8d2"/><rect x="${x-4}" y="${y}" width="8" height="5" fill="#6a4a2a"/></g>`;
     else if(pr.kind==="sofa")s+=`<rect x="${x-14}" y="${y-8}" width="28" height="12" rx="4" fill="#3a5a6a"/>`;
     else if(pr.kind==="coffee")s+=`<g><rect x="${x-5}" y="${y-12}" width="10" height="14" rx="2" fill="#8a8a9a"/><rect x="${x-3}" y="${y-10}" width="6" height="3" fill="#c8a24a"/></g>`;
     if(pr.label)s+=`<text x="${x}" y="${y+12}" font-size="8" fill="#9a9aa8" text-anchor="middle">${pr.label}</text>`}

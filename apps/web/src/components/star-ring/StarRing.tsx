@@ -13,6 +13,7 @@
  *  - 布局协作：经 window 自定义事件 askrail-width 通知 Bridge 预留右侧空间（320px / 56px）
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { demoRailMessages } from "../../lib/demo-conversation";
 import { useLocation, useNavigate } from "react-router";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
 import { AgentActionMessage, HumanBubble } from "../hud/messages";
@@ -74,6 +75,7 @@ export function StarRing() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [msgs, setMsgs] = useState<RingMsg[]>([]);
+  const scriptLoaded = useRef(false);
   const msgSeq = useRef(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -99,6 +101,24 @@ export function StarRing() {
     void poll();
     const t = setInterval(() => void poll(), 10000);
     return () => { alive = false; clearInterval(t); };
+  }, []);
+
+  /* ---------- 演示会话剧本（DEMO-SCRIPT：首开非空——全场景运行态） ---------- */
+  useEffect(() => {
+    if (scriptLoaded.current) return;
+    void ensureDemoLogin().then(() =>
+      trpc.onboarding.status.query()
+        .then((r) => {
+          if (scriptLoaded.current) return;
+          scriptLoaded.current = true;
+          const n = (r as { workspace?: { name?: string } }).workspace?.name ?? "";
+          const script = demoRailMessages(n);
+          setMsgs((prev) => prev.length > 0 ? prev : script.map((m, i) => ({
+            id: -(i + 1), role: m.role, text: m.text, action: m.action, linkTo: m.linkTo, receipt: "unverified",
+          })));
+        })
+        .catch(() => undefined),
+    );
   }, []);
 
   /* ---------- ⌘K / Ctrl+K 聚焦输入框 ---------- */

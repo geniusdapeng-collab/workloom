@@ -784,7 +784,7 @@ async function main(): Promise<void> {
     { id: "tg-lead-follow-30min", name: "线索跟进巡检（每 30 分钟，A级 1h SLA）", kind: "cron", schedule: "*/30 * * * *", action: { dispatch: "ai-receptionist", template: "lead.follow.scan" } },
     // 数字CEO 节拍（D21：CEO Loop；调度器消费前经治理守卫校验 charter.mode）
     { id: "tg-ceo-brief-0830", name: "公司CEO 晨报 08:30", kind: "cron", schedule: "30 8 * * *", action: { beat: "daily" } },
-    { id: "tg-ceo-queue-2h", name: "公司CEO 裁决巡检 2h", kind: "cron", schedule: "7 */2 * * *", action: { beat: "queue" } },
+    { id: "tg-ceo-queue-2h", name: "公司CEO 审批巡检 2h", kind: "cron", schedule: "7 */2 * * *", action: { beat: "queue" } },
     { id: "tg-ceo-deviation", name: "公司CEO 目标偏差扫描", kind: "cron", schedule: "15 */4 * * *", action: { beat: "deviation" } },
     { id: "tg-ceo-breaker", name: "公司CEO 自治熔断巡检", kind: "cron", schedule: "45 23 * * *", action: { beat: "breaker" } },
   ];

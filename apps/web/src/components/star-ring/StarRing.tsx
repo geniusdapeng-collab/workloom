@@ -158,7 +158,7 @@ export function StarRing() {
       } else {
         // quest 立项：不离开当前页，给 P2 下钻口
         pushMsg({
-          role: "agent", action: "总导演已接单", receipt: "unverified", refId: r.threadId,
+          role: "agent", action: "公司CEO 已接单", receipt: "unverified", refId: r.threadId,
           text: `已立项 ${r.threadId ?? "—"}（状态 ${r.status ?? "queued"}）：「${text}」。点击跳任务页跟进执行。`,
           linkTo: r.threadId ? `/p2/${encodeURIComponent(r.threadId)}` : undefined,
         });

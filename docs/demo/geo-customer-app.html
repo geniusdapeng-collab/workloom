@@ -25,7 +25,7 @@
   }
   @media (min-width: 768px) {
     body { padding: 32px 0; align-items: flex-start; }
-    .phone { border-radius: 40px; border: 1px solid #ffe4ec; min-height: 840px; max-height: 880px; box-shadow: 0 40px 120px rgba(0,0,0,.7), 0 0 0 8px #fff5f7; }
+    .phone { border-radius: 40px; border: 1px solid #ffe4ec; min-height: 840px; max-height: 880px; box-shadow: 0 40px 120px rgba(51,38,43,.25), 0 0 0 8px #fff5f7; }
   }
   .scroll { height: 100%; overflow-y: auto; overflow-x: hidden; padding-bottom: 96px; scrollbar-width: none; }
   .scroll::-webkit-scrollbar { display: none; }
@@ -157,7 +157,7 @@
       <div class="live-dot">值守中</div>
     </div>
 
-    <!-- ============ 首页·战报 ============ -->
+    <!-- ============ 首页·日报 ============ -->
     <div class="screen on" id="s-home">
       <div class="northstar">
         <div class="ns-label">本月双入口有效询盘（北极星指标）</div>
@@ -182,7 +182,7 @@
       </div>
       <div class="small muted" style="margin-top:8px">竞对 A：提及 34% / 首推 19% / SOV 28% —— 差距即是你的增长空间</div>
 
-      <div class="sec-title">今晨战报 · 公司CEO 08:30 送达</div>
+      <div class="sec-title">今晨日报 · 公司CEO 08:30 送达</div>
       <div class="brief">
         董事长，早报已备：昨日<b>能见度品牌词提及 4/6（▲2）</b>，社媒播放 <b>1.9w（▲22%）</b>；<b>双入口询盘 3 条</b>（社媒 2 / AI 搜索 1，德国 Hans 已进入报价谈判）；1 件谨慎上浮请您定——<b>百科词条功率口径修复外发</b>。试用期第 4 天，边界降一档执行中。
       </div>
@@ -220,12 +220,12 @@
       <div class="apr l4" id="a3">
         <span class="gate">G20 · 品牌表态 · 强制 L4 人审</span>
         <div class="title">「锐科 vs 竞对A」AI 答案负面偏差回应</div>
-        <div class="why">CEO 意见：能见度监测发现对比词答案存在事实偏差（功率口径），建议以实体卡口径发澄清稿——涉品牌表态，AI 不替您做人格化承诺，必须您本人裁决。</div>
+        <div class="why">CEO 意见：能见度监测发现对比词答案存在事实偏差（功率口径），建议以实体卡口径发澄清稿——涉品牌表态，AI 不替您做人格化承诺，必须您本人审批。</div>
         <div class="acts"><div class="btn ok" onclick="decide('a3','已签发澄清稿','ok')">✓ 批准</div><div class="btn mid" onclick="decide('a3','改口径后发回','mid')">✎ 校准</div><div class="btn no" onclick="decide('a3','已驳回（原因留痕）','no')">✗ 驳回</div></div>
         <div class="stamp" id="a3s"></div>
       </div>
 
-      <div class="sec-title">今日已裁决 · 全部留痕可回测</div>
+      <div class="sec-title">今日已审批 · 全部留痕可回测</div>
       <div class="card small" style="line-height:2; color:var(--ink2)">
         ✓ 清晨决策包 4 件（报价浮动带内 2 / 排期调整 1 / 常规回复 1）<br>
         ✓ 昨日 L2 下沉率 86% —— 只有 14% 需要您亲决<br>
@@ -312,7 +312,7 @@
         <div class="nm">GEO 经营包 · 双域全量</div>
         <div class="pr">¥8,000<span> /月 · 基础包 ¥5,000 + GEO 经营包 ¥3,000</span></div>
         <div class="small" style="color:var(--ink2); margin-top:8px; line-height:1.7">
-          含：账号矩阵 3 个 · 内容工厂 · 双域分发 · 能见度周频监测 · 引用源建设 · 口径巡检 · 回测战报<br>
+          含：账号矩阵 3 个 · 内容工厂 · 双域分发 · 能见度周频监测 · 引用源建设 · 口径巡检 · 回测日报<br>
           算力/模型成本穿透不加价 · 敢接效果对赌（回测账本结算）
         </div>
       </div>
@@ -347,7 +347,7 @@
 
   <!-- ============ Tabbar ============ -->
   <div class="tabbar">
-    <div class="tab on" data-s="s-home" onclick="go(this)"><span class="ic">📊</span>战报</div>
+    <div class="tab on" data-s="s-home" onclick="go(this)"><span class="ic">📊</span>日报</div>
     <div class="tab" data-s="s-apr" onclick="go(this)"><span class="ic">✋</span>审批<span class="badge">3</span></div>
     <div class="tab" data-s="s-inq" onclick="go(this)"><span class="ic">💬</span>询盘<span class="badge">4</span></div>
     <div class="tab" data-s="s-vis" onclick="go(this)"><span class="ic">📡</span>能见度</div>

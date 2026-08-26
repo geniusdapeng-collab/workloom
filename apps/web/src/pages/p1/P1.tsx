@@ -292,8 +292,8 @@ export default function P1() {
             P1 · OVERVIEW{isCommunity ? " · 社区版" : ""}{demo ? ` · demo=${demo}` : ""}
           </span>
           <span className="flex-1" />
-          {/* 本页主理员工（工作台=总导演；点击 → P8 员工档案） */}
-          <HostAgent presetKey="director" fallbackName="总导演" />
+          {/* 本页主理员工（工作台=公司CEO；点击 → P8 员工档案） */}
+          <HostAgent presetKey="company-ceo" fallbackName="公司CEO" />
         </div>
 
         {error && (

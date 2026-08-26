@@ -10,7 +10,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
-import { shortId } from "../../lib/display";
+import { actionText, payloadText, shortId } from "../../lib/display";
 import {
   BannerAlert,
   EmergencyBrake,
@@ -25,7 +25,7 @@ interface NightRun {
 }
 interface ApprovalRow {
   approval_id: string; event_id: string; status: string;
-  snapshot: { summary?: string; title?: string; gate?: string; ceo_rationale?: string; params?: Record<string, unknown>; before?: unknown; after?: unknown; rule_version?: string; high_risk?: boolean; gesture?: string };
+  snapshot: { summary?: string; title?: string; action?: string; gate?: string; ceo_rationale?: string; params?: Record<string, unknown>; before?: unknown; after?: unknown; rule_version?: string; high_risk?: boolean; gesture?: string };
 }
 
 type Filter = "all" | "done" | "pending" | "needHuman";
@@ -118,7 +118,7 @@ export default function P3() {
           <div className="flex items-center gap-2">
             <a href="/" className="text-caption text-holo no-underline">← 工作台</a>
             <span className="text-h2 font-black text-ink">掌上日报</span>
-            <span className="text-micro tracking-[.2em] text-ink3">P3 · HANDOFF</span>
+            <span className="text-micro tracking-[.2em] text-ink3">P3 · 交付</span>
           </div>
 
           {banner && <BannerAlert level={banner.level} actionLabel="好" onAction={() => setBanner(null)}>{banner.text}</BannerAlert>}
@@ -179,9 +179,7 @@ export default function P3() {
                     <span className="text-body font-bold text-warn">◆ 待审批</span>
                     <span className="font-mono text-micro text-ink3">{shortId(a.approval_id)}</span>
                   </div>
-                  {(a.snapshot.summary ?? a.snapshot.title) && (
-                    <div className="mb-1 text-body font-bold text-ink">{a.snapshot.summary ?? a.snapshot.title}</div>
-                  )}
+                  {(<div className="mb-1 text-body font-bold text-ink">{a.snapshot.summary ?? a.snapshot.title ?? `${actionText(String(a.snapshot.action ?? ""))} · 需拍板`}</div>)}
                   {a.snapshot.ceo_rationale && (
                     <div className="mb-1.5 text-caption text-ink2">CEO 意见：{a.snapshot.ceo_rationale}</div>
                   )}
@@ -190,8 +188,8 @@ export default function P3() {
                   )}
                   {(a.snapshot.before !== undefined || a.snapshot.after !== undefined) && (
                     <div className="mb-2.5 rounded-lg border border-line bg-bg800/60 p-2.5 font-mono text-caption">
-                      <div className="text-ink3 line-through">{JSON.stringify(a.snapshot.before)}</div>
-                      <div className="mt-0.5 text-holo">{JSON.stringify(a.snapshot.after)}</div>
+                      <div className="text-ink3 line-through">{a.snapshot.before != null ? payloadText(a.snapshot.before) : "—"}</div>
+                      <div className="mt-0.5 text-holo">{payloadText(a.snapshot.after)}</div>
                     </div>
                   )}
                   {canApprove && (

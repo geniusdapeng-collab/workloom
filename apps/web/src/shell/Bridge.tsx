@@ -7,7 +7,8 @@
  * 内部数据为占位；逐页接线真实 API 在 F3–F11。
  */
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ensureDemoLogin, trpc } from "../lib/trpc";
 import { EmergencyBrake, NightStatusPill } from "../components/hud";
 import { LiveTicker } from "../components/hud/LiveTicker";
 import { SimBanner } from "../components/SimBanner";
@@ -81,6 +82,14 @@ export function Bridge({
   const community = plan === "community";
   // AskRail 布局协作：右侧通栏 Ask 对话框常驻，主区预留其宽度（320 展开/56 收起）
   const railW = useAskRailPadding();
+  const [wsName, setWsName] = useState("WorkLoom");
+  useEffect(() => {
+    void ensureDemoLogin().then(() =>
+      trpc.onboarding.status.query()
+        .then((r) => { const n = (r as { workspace?: { name?: string } }).workspace?.name; if (n) setWsName(n); })
+        .catch(() => undefined),
+    );
+  }, []);
   return (
     <div className="min-h-screen bg-bg950" style={{ paddingRight: railW }}>
       <StarField />
@@ -106,11 +115,11 @@ export function Bridge({
                 <path d="M10.2 11.4v5.6l4.8-2.8z" fill="#1b1206" />
               </svg>
               <span className="bg-gradient-to-r from-gold to-gold2 bg-clip-text text-transparent">
-                视频经理
+                {wsName}
               </span>
             </div>
             <span className="text-xs text-ink3">
-              WorkLoom · <b className="font-semibold text-ink2">视频创作工作室</b>
+              WorkLoom 获客系统 · <b className="font-semibold text-ink2">AI 获客经营工作室</b>
             </span>
             <span className="flex-1" />
             <PlanSwitcher onPlan={setPlan} />

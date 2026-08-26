@@ -37,7 +37,8 @@
     "postinstall": "node scripts/postinstall-note.js || true",
     "overview:pptx": "python3 scripts/build-overview-pptx.py",
     "oss:watch": "bash scripts/oss-watch.sh",
-    "oss:plan": "bash scripts/oss-watch.sh --show"
+    "oss:plan": "bash scripts/oss-watch.sh --show",
+    "db:seed:acq": "tsx --env-file=.env scripts/seed-acquisition.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

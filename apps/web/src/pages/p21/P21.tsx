@@ -4,7 +4,7 @@
  */
 import { useEffect, useState } from "react";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
-import { actionText, shortId } from "../../lib/display";
+import { actionText, payloadText, shortId } from "../../lib/display";
 import { Bridge } from "../../shell/Bridge";
 
 const StatusPill = ({ tone, children }: { tone: "ok" | "warn" | "info"; children: React.ReactNode }) => (
@@ -252,7 +252,7 @@ export default function P21() {
                     {snap.ceo_escalated && <span className="rounded border border-holo/40 px-1 text-holo">公司CEO 谨慎上浮</span>}
                   </div>
                   <div className="text-xs text-ink2">
-                    参数 {JSON.stringify(snap.params ?? {})}
+                    参数 {payloadText(snap.params ?? {}, 120)}
                     {snap.base_price ? ` · 基准价 ¥${snap.base_price}` : ""}
                   </div>
                   {snap.ceo_rationale && <div className="mt-1 text-xs text-holo">CEO 意见：{snap.ceo_rationale}</div>}

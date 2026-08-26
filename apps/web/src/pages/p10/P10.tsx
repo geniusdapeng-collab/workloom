@@ -1,5 +1,5 @@
 /**
- * P10 片库 · 渲染脚本 CMS（F12：video.cms/render 端点接线；fusion-design §6 逐条对账）
+ * P10 片库 · 内容资产（F12：video.cms/render 端点接线；fusion-design §6 逐条对账）
  *  - 脚本列表：按项目分组（script_key 链聚合）、状态 chip（draft/approved/submitted/rendering/done/failed）、版本链
  *  - MD 详情：工作台展示（getScript）+ contentEditable 本地编辑（§6 本地编辑纪律：保存即新版本，不原地改）
  *  - 保存为新版本（cms.saveScriptVersion：parent_version 链 + diff 摘要 + 字数校验快照 2470-3000 口径）
@@ -255,7 +255,7 @@ export default function P10() {
     <Bridge left={left} right={right}>
       <div className="px-1">
         <div className="mb-4 flex items-baseline gap-3">
-          <h2 className="text-[20px] font-black text-ink">片库 · 渲染脚本 CMS</h2>
+          <h2 className="text-[20px] font-black text-ink">片库 · 内容资产</h2>
           <span className="text-caption text-ink3">每镜一脚本 · 版本链管理 · 三档提交</span>
           <span className="text-[11px] tracking-[.2em] text-ink3">P10 · SCRIPT CMS</span>
         </div>

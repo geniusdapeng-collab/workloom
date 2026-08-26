@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
-import { actionText, actorText } from "../../lib/display";
+import { actionText, actorText, payloadText } from "../../lib/display";
 import { SimBanner } from "../../components/SimBanner";
 import { useAskRailPadding } from "../../lib/useAskRail";
 import { FloorView, type FloorPayload, type FloorAgent } from "./Floor";
@@ -321,7 +321,7 @@ export default function P0() {
                 <div key={q.approval_id} className="rounded-lg border border-amber-300/30 bg-card p-3">
                   <div className="text-xs text-ink2">
                     <b>{q.snapshot.title ?? actionText(q.snapshot.action ?? q.payload.decision.action)}</b>
-                    <span className="ml-2 text-ink3">{JSON.stringify(q.snapshot.params ?? {}).slice(0, 60)}</span>
+                    <span className="ml-2 text-ink3">{payloadText(q.snapshot.params ?? {}, 80)}</span>
                   </div>
                   {q.snapshot.ceo_rationale && <div className="mt-1 text-[11px] text-holo">CEO 意见：{q.snapshot.ceo_rationale}</div>}
                   <div className="mt-2 flex gap-2">

@@ -28,7 +28,8 @@
     "db:seed:geo": "tsx --env-file=.env scripts/seed-geo.ts",
     "suite:geo": "tsx --env-file=.env scripts/suite-geo.ts",
     "release:gate": "tsx --env-file=.env scripts/release-gate.ts",
-    "suite:hotel": "tsx --env-file=.env scripts/suite-hotel.ts"
+    "suite:hotel": "tsx --env-file=.env scripts/suite-hotel.ts",
+    "agent:tour": "bash scripts/agent-tour.sh"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

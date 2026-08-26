@@ -239,8 +239,8 @@ async function main() {
     const exists = await owner.query(`SELECT 1 FROM approvals WHERE approval_id=$1`, [a.id]);
     if ((exists.rowCount ?? 0) > 0) continue;
     await owner.query(
-      `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, snapshot, created_at)
-       VALUES ($1,$2,$3,$4,'inapp','pending',$5,$6)`,
+      `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, tier, snapshot, created_at)
+       VALUES ($1,$2,$3,$4,'inapp','pending','l4_chairman',$5,$6)`,
       [a.id, TENANT_ID, WS_ID, (a as unknown as { eventRef: string }).eventRef, JSON.stringify(a.snapshot), at(90)],
     );
     aprNew++;

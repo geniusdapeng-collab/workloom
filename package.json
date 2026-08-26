@@ -8,11 +8,11 @@
     "node": ">=24.0.0"
   },
   "dependencies": {
+    "@workloom/base": "workspace:*",
+    "@workloom/runtime": "workspace:*",
     "@workloom/shared": "workspace:*",
     "pg": "8.23.0",
-    "yaml": "2.9.0",
-    "@workloom/base": "workspace:*",
-    "@workloom/runtime": "workspace:*"
+    "yaml": "2.9.0"
   },
   "scripts": {
     "dev": "node scripts/dev-note.js && concurrently -k -n server,web \"pnpm -C apps/server dev\" \"pnpm -C apps/web dev\"",
@@ -47,9 +47,9 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "concurrently": "^9.1.0",
-    "tsx": "^4.19.0",
-    "typescript": "^5.9.0",
-    "vitest": "^3.2.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11",
     "yaml": "2.9.0"
   },
   "description": "WorkLoom 获客系统 · 短视频社媒营销 × GEO × 获客五环 × 行业运营（首垂直：酒店）"

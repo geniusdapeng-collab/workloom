@@ -222,7 +222,7 @@ export function StarRing() {
 
   /* ---------- 展开态：320px 通栏对话框 ---------- */
   return (
-    <div className="fixed inset-y-0 right-0 z-40 flex w-80 flex-col border-l border-gline/60 bg-bg900/95 shadow-[-20px_0_60px_rgba(0,0,0,.45)] backdrop-blur-md">
+    <div className="fixed inset-y-0 right-0 z-40 flex w-80 flex-col border-l border-gline bg-bg900/95 backdrop-blur-md">
       {/* 头部 */}
       <div className="flex items-center gap-2 border-b border-line px-3 py-2.5">
         <span className="flex h-8 w-8 items-center justify-center rounded-full gold-grad shadow-[0_0_16px_rgba(255,160,60,.45)]">

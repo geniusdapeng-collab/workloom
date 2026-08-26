@@ -6,10 +6,14 @@ import { useEffect, useState } from "react";
  * Bridge 与 P0（不走 Bridge 的全页剧场）共用。
  */
 export function useAskRailPadding(): number {
-  const [railW, setRailW] = useState(320);
+  // 初始值读全局通道：hook 挂载晚于 StarRing 广播（StrictMode 双挂载/登录重挂载）时仍能拿到最终宽度
+  const [railW, setRailW] = useState(() => (window as unknown as { __askrailW?: number }).__askrailW ?? 320);
   useEffect(() => {
     const onRail = (e: Event) => setRailW((e as CustomEvent<{ width: number }>).detail.width);
     window.addEventListener("askrail-width", onRail);
+    // 挂载即校准一次（订阅前可能错过广播）
+    const cur = (window as unknown as { __askrailW?: number }).__askrailW;
+    if (typeof cur === "number") setRailW(cur);
     return () => window.removeEventListener("askrail-width", onRail);
   }, []);
   return railW;

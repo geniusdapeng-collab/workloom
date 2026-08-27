@@ -70,7 +70,7 @@ pnpm db:seed                         # 酒店获客演示种子（可选；geo/v
 |---|---|
 | `apps/server` | tRPC 服务端（:8787） |
 | `apps/web` / `apps/webc` | B 端 PC 工作台 / C 端 H5（:5173） |
-| `packages/base` | 底座包：workdata（事件/RLS）、fence-engine（围栏 DSL）、publish-rpa（全平台 RPA 发布）等 |
+| `packages/base` | 底座包：workdata（事件/RLS）、fence-engine（围栏 DSL）、publish-rpa（全平台 RPA 发布）、computer-use（生产级电脑/浏览器自动操作，见 docs/computer-use-production.md）等 |
 | `bundles/` | 行业 Bundle：`hotel/`（酒店获客 v3.3.0）、`geo-growth/`（GEO 双域）、`ai-video/` |
 | `skills/official/` | 自带技能：release-gate / industry-entry / product-feedback / demo-mirror 等 |
 | `scripts/` | `suite*.ts` 测试套件、`seed*.ts` 种子、`release-gate.ts` 发布门禁、`agent-tour.sh` 能力巡游、`preview-all.sh` 三端预览 |

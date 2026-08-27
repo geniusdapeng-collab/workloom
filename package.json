@@ -38,7 +38,14 @@
     "overview:pptx": "python3 scripts/build-overview-pptx.py",
     "oss:watch": "bash scripts/oss-watch.sh",
     "oss:plan": "bash scripts/oss-watch.sh --show",
-    "db:seed:acq": "tsx --env-file=.env scripts/seed-acquisition.ts"
+    "db:seed:acq": "tsx --env-file=.env scripts/seed-acquisition.ts",
+    "computer": "tsx packages/base/computer-use/cli.ts",
+    "computer:preflight": "bash packages/base/computer-use/toolkit/preflight_check.sh",
+    "computer:start": "bash packages/base/computer-use/toolkit/start_desktop.sh",
+    "computer:stop": "bash packages/base/computer-use/toolkit/stop_desktop.sh",
+    "computer:serve": "tsx packages/base/computer-use/serve.ts",
+    "computer:mcp": "tsx packages/base/computer-use/mcp.ts",
+    "computer:smoke": "tsx packages/base/computer-use/smoke.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

@@ -22,7 +22,7 @@ pnpm install && pnpm preview:all
 |---|---|---|
 | ![PC](demo/preview-shots/pc-3000.png) | ![B移动](demo/preview-shots/shell-guest.png) | ![C移动](demo/preview-shots/mobile-c-3002.png) |
 
-## 📦 能力总览（34 项）
+## 📦 能力总览（35 项）
 
 ### 🖥 三端应用（开箱即看）
 
@@ -70,6 +70,7 @@ pnpm install && pnpm preview:all
 
 | 能力 | 一句话 | 怎么体验 |
 |---|---|---|
+| **一键安装（bootstrap）** | 克隆后一条命令装好全部能力：环境/依赖/PG/迁移种子/桌面栈，幂等 | `pnpm setup` |
 | **主测试套件** | 数百条场景用例逐条执行 | `pnpm suite` |
 | **GEO 域套件** | GEO 双域专项 | `pnpm suite:geo` |
 | **酒店域套件** | 酒店域专项 | `pnpm suite:hotel` |

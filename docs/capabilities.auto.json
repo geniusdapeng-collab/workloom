@@ -1,7 +1,7 @@
 {
  "repo": "workloom-ai-acquisition",
  "description": "WorkLoom 获客系统 · 短视频社媒营销 × GEO × 获客五环 × 行业运营（首垂直：酒店）",
- "generatedAt": "2026-08-27T00:58:25.541Z",
+ "generatedAt": "2026-08-27T01:23:58.569Z",
  "demoPages": [
   "geo-customer-app.html",
   "geo-demo-c.html",
@@ -161,6 +161,11 @@
    "icon": "✅",
    "title": "验证与质量（工程纪律）",
    "items": [
+    {
+     "name": "一键安装（bootstrap）",
+     "how": "`pnpm setup`",
+     "desc": "克隆后一条命令装好全部能力：环境/依赖/PG/迁移种子/桌面栈，幂等"
+    },
     {
      "name": "主测试套件",
      "how": "`pnpm suite`",

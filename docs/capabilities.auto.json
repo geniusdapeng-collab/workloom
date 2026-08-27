@@ -1,7 +1,7 @@
 {
  "repo": "workloom-ai-acquisition",
  "description": "WorkLoom 获客系统 · 短视频社媒营销 × GEO × 获客五环 × 行业运营（首垂直：酒店）",
- "generatedAt": "2026-08-27T00:23:48.084Z",
+ "generatedAt": "2026-08-27T00:58:25.541Z",
  "demoPages": [
   "geo-customer-app.html",
   "geo-demo-c.html",
@@ -62,6 +62,22 @@
      "name": "bundles/hotel/",
      "how": "见 bundles/hotel/ 目录",
      "desc": "围栏/技能/员工/对象/管线一键装配"
+    }
+   ]
+  },
+  {
+   "icon": "🖐",
+   "title": "操作电脑能力（本仓自带 · 可装生产工作站）",
+   "items": [
+    {
+     "name": "computer-use 三层感知（65 动作）",
+     "how": "`pnpm computer:preflight && pnpm computer:smoke`",
+     "desc": "L1 浏览器 DOM 零 token / L2 全 GUI 语义树 / L3 像素兜底——克隆即可用，不依赖沙箱"
+    },
+    {
+     "name": "HTTP 远程驱动 + MCP server",
+     "how": "`pnpm computer:serve` / `pnpm computer:mcp`",
+     "desc": "大脑/手分离：专用工作站被云端 Agent/CI 远程驱动（docs/computer-use-production.md）"
     }
    ]
   },

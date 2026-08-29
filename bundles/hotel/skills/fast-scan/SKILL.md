@@ -61,3 +61,19 @@ description: 获客全链路快照快扫（快速体检）。售前/接入当场
 - 报告中每条估算金额均带口径标注；任一数据源缺失时报告正常产出且对应检项标注"未覆盖"。
 - Top10 清单按「流量→转化→成交」链路排序，每条可定位到具体环节与证据快照。
 - 全程事件库无任何平台写操作记录（RuleImpact 全为只读动作）。
+
+## 七、引擎锚点映射表（packages/audit-engine）
+
+本技能的工程实现为 `@workloom/audit-engine`（`packages/audit-engine`）：纯函数分析器 + `runFastScan` 编排 + `pnpm audit:scan` CLI（`scripts/audit-scan.ts`）。技能叙述与代码事实源的逐条锚点如下——改阈值先改围栏/本表，再改代码常量，三者必须同源。
+
+| 技能线（步骤） | 分析器 | 关键阈值常量（src/analyzers/*） | 围栏/口径锚点 |
+| --- | --- | --- | --- |
+| 酒店运营线·价格健康（步骤2） | `analyzers/price.ts`（line=`hotel_price`） | `PARITY_GAP_THRESHOLD=0.08`（倒挂告警）/ `PARITY_GAP_P0=0.15` / `HOLIDAY_UPLIFT_MIN=1.05` / `WEEKDAY_HIGH_RATIO=1.5` / `WEEKDAY_LOW_RATIO=0.6` | R17 倒挂防护；R2 保底价熔断（一店一档 `business.floor_price`，缺失回退 `DEFAULT_FLOOR_PRICE=380`）；R1 涨幅 8% 同源 |
+| 酒店运营线·房态与对账·房态段（步骤3） | `analyzers/inventory.ts`（line=`hotel_inventory`） | `MAINTENANCE_RATIO_REDLINE=0.1`（问题房占比） | R18 超售漏售防护（可售为负/关房未售/同步失败下架转 review） |
+| 酒店运营线·房态与对账·对账段（步骤3） | `analyzers/channel.ts`（line=`hotel_channel`） | `COMMISSION_TOLERANCE_PP=0.005`（0.5pp）/ `COMMISSION_DIFF_P1_AMOUNT=500` / `CHANNEL_DEPENDENCE_REDLINE=0.6` / `CHANNEL_DEPENDENCE_P0=0.8` | 渠道账单逐笔勾稽（应提 vs 实提）；单渠道依赖度红线 |
+| 酒店运营线·口碑存量（步骤4） | `analyzers/reputation.ts`（line=`hotel_reputation`） | `BAD_RATING_MAX=3` / `UNREPLIED_HOURS=24` / `UNREPLIED_HOURS_P0=72` / `LOW_RATING=4.2` / `RATING_DROP_REDLINE=0.3` / `CLUSTER_MIN_BAD=3`（30天同关键词） | R19 差评 24h SLA；R6 差评 ≤3 分口径；关键词表 `BAD_KEYWORDS`（产出给 intent-radar 作选题矿源） |
+| 获客转化线·账号与内容（步骤5） | `analyzers/growth.ts`（line=`growth`） | `LIMIT_DROP_RATIO=0.5` / `LIMIT_STREAK_MIN=3` / `LIMIT_STREAK_P0=5` / `SENSITIVE_OPS_MAX=3` / `STALE_DAYS_P1=7` / `STALE_DAYS_P0=14` / `LOW_COMPLETION=0.15` / `HIT_MULTIPLE=3` / `REUSE_WINDOW_DAYS=30` | G16 防关联/敏感操作只读核查；G9 发布必审纪律（违规复盘归预检清单） |
+| 获客转化线·GEO 可见度（步骤6） | `analyzers/geo.ts`（line=`geo`） | `BRAND_ABSENT_LEAD_MONTHLY=3` / `HIJACK_LEAD_MONTHLY=2`（经验估算系数） | geo-growth-baseline 能见度监测/引用源建设口径（提及/首推/竞对被引）；G-GEO 灰帽零容忍（本线只诊断不优化） |
+| 获客转化线·承接与转化（步骤6） | `analyzers/funnel.ts`（line=`funnel`） | `DM_RESPONSE_HOURS=12` / `LEAD_FOLLOWUP_HOURS=48` / `LEAD_CONV_RATE=0.001` / `NO_COMPONENT_LEAD_RATE=0.0002` / `LEAD_NO_VISIT_DAYS=7` | G10 评论私信分流纪律同源（首响 SLA）；R24 客资脱敏（线索只用脱敏聚合口径） |
+
+报告口径：一店一份 + 集团总览 + 按「流量→转化→成交」链路分组（`chainGroups`：growth/geo→流量，funnel→转化，hotel_*→成交）+ Top10 按**年化**挽回降序（monthly ×12 折算）；所有 Finding 带 `calculation`（可复算）与 `estimatedImpact.confidence`（exact/baseline/estimate，计量单位 CNY/LEADS/FANS 分桶不互折算）；数据源缺失 → 该线 `not-covered`/`partial` 降级出部分报告（30 分钟软预算，`FastScanOptions.timeBudgetMinutes`）。验收对应：`packages/audit-engine/test/planted-issues.test.ts` 埋点考卷（倒挂 12%/破保底价/超售/差评 36h 未回/断更 9 天/GEO 品牌词缺席/爆款未挂组件/询盘 60h 未跟进，8 个埋点独立算出且严重度正确）。

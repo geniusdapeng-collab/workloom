@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "@workloom/base": "workspace:*",
+    "@workloom/audit-engine": "workspace:*",
+    "@workloom/db": "workspace:*",
     "@workloom/runtime": "workspace:*",
     "@workloom/shared": "workspace:*",
     "pg": "8.23.0",
@@ -29,6 +31,7 @@
     "suite:geo": "tsx --env-file=.env scripts/suite-geo.ts",
     "release:gate": "tsx --env-file=.env scripts/release-gate.ts",
     "suite:hotel": "tsx --env-file=.env scripts/suite-hotel.ts",
+    "audit:scan": "tsx --env-file=.env scripts/audit-scan.ts",
     "agent:tour": "bash scripts/agent-tour.sh",
     "preview:all": "bash scripts/preview-all.sh",
     "capabilities": "node scripts/generate-capabilities.mjs",

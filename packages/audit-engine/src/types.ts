@@ -8,9 +8,34 @@
  * 数据流：连接器只读快照（PMS/OTA + 社媒 + GEO）→ AuditSnapshot（归一化数据集）
  *        → 七个分析器（酒店运营线 4 + 获客转化线 3）→ Finding[] → AuditReport。
  * 全程只读：引擎不触碰任何 PMS/OTA/社媒/GEO 写接口，只读快照进、发现/报告出。
+ *
+ * 分层纪律：通用质检模型（Severity/Confidence/ImpactPeriod/Coverage…）
+ * 一律复用 @workloom/audit-core 内核（packages/base/audit-core，vendored from workloom-im），
+ * 本文件只保留双线快照数据集、行业发现/报告视图与计量单位口径，不再重复定义内核类型。
  */
 
-// ---------- 枚举 ----------
+// ---------- 内核通用类型（re-export，事实源在 audit-core） ----------
+
+import type {
+  Coverage,
+  Coverage as LineCoverage,
+  ImpactConfidence as Confidence,
+  ImpactPeriod,
+  Severity,
+} from "../../base/audit-core/index.js";
+
+export type {
+  Severity,
+  ImpactConfidence,
+  /** 兼容旧名：Confidence = ImpactConfidence */
+  ImpactConfidence as Confidence,
+  ImpactPeriod,
+  Coverage,
+  /** 兼容旧名：LineCoverage = Coverage */
+  Coverage as LineCoverage,
+} from "../../base/audit-core/index.js";
+
+// ---------- 行业检线 ----------
 
 /** 双线七线：酒店运营线（hotel_*）+ 获客转化线（growth/geo/funnel） */
 export type AuditLine =
@@ -24,15 +49,6 @@ export type AuditLine =
 
 /** 链路环节（报告按「流量→转化→成交」分组） */
 export type ChainStage = "traffic" | "conversion" | "deal";
-
-/** 严重度：P0=立即止损/红线，P1=显著渗漏需本周处理，P2=优化项 */
-export type Severity = "P0" | "P1" | "P2";
-
-/** 估算置信度：exact=可逐笔勾稽的精确值；baseline=按门店/类目基准估算；estimate=经验估计 */
-export type Confidence = "exact" | "baseline" | "estimate";
-
-/** 金额口径周期 */
-export type ImpactPeriod = "one-off" | "monthly" | "yearly";
 
 /**
  * 估算计量单位（复用 currency 字段名，与电商版骨架一致）：
@@ -371,9 +387,6 @@ export interface Finding {
 }
 
 // ---------- 报告（输出） ----------
-
-/** 单条线的覆盖度：covered=已扫描；partial=部分子项因数据缺失降级；not-covered=数据源缺失/超时未扫 */
-export type LineCoverage = "covered" | "partial" | "not-covered";
 
 /** 一店一份 */
 export interface HotelReport {

@@ -2,7 +2,7 @@
 # 叠加于 hotel-baseline/v3 之上，只可收紧不可放宽（F2.3 单调守卫）
 version: hotel-patch-low-star-single/v1
 applies_to: low_star_single
-base: hotel-baseline/v3
+base: hotel-baseline/v4
 patches:
   - rule_id: R1
     tighten:

@@ -31,9 +31,15 @@ export const trpc = createTRPCClient<AppRouter>({
   ],
 });
 
-/** 演示身份自动登录（种子成员；演示工作区 video-studio） */
-export async function ensureDemoLogin(memberNo = "MEM-V01"): Promise<void> {
+/**
+ * 演示身份自动登录（演示/开发便利；生产部署用真实登录替代）。
+ * 工作区与成员均可经 VITE_DEMO_WORKSPACE / VITE_DEMO_MEMBER 覆盖——
+ * 不写死在调用侧，客户自建工作区（非 video-studio 种子库）时演示登录仍可用。
+ */
+const DEMO_WORKSPACE = (import.meta.env.VITE_DEMO_WORKSPACE as string | undefined) ?? "video-studio";
+const DEMO_MEMBER = (import.meta.env.VITE_DEMO_MEMBER as string | undefined) ?? "MEM-V01";
+export async function ensureDemoLogin(memberNo = DEMO_MEMBER): Promise<void> {
   if (getToken()) return;
-  const r = await trpc.auth.loginAs.mutate({ workspaceSlug: (import.meta.env.VITE_WS_SLUG ?? "video-studio"), memberNo: (import.meta.env.VITE_MEMBER_NO ?? memberNo) });
+  const r = await trpc.auth.loginAs.mutate({ workspaceSlug: DEMO_WORKSPACE, memberNo });
   setToken(r.token);
 }

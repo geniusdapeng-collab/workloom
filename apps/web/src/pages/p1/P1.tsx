@@ -314,7 +314,7 @@ export default function P1() {
           <div className="flex-1 space-y-3.5">
             <SystemDivider
               time={new Date().toTimeString().slice(0, 5)}
-              summary={`${profile?.archive?.brand ?? "视频经理 · 演示工作室"} · ${me?.identity.name ?? ""} 已上线（演示身份 MEM-V01 陈主理）`}
+              summary={`${profile?.archive?.brand ?? "视频经理 · 演示工作室"} · ${me?.identity.name ?? ""} 已上线（演示身份）`}
             />
 
             {/* P1E3 交接班卡（夜班未启用 → 空态「去配置」F4.8） */}

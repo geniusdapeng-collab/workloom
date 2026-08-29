@@ -96,8 +96,8 @@ a("获客域围栏 R21-R26 齐备且级别正确", () => {
     assert(r!.level === level, `${id} level=${r!.level} ≠ ${level}`);
   }
 });
-a("29 个技能目录且 frontmatter 合法", () => {
-  assert(skillDirs.length === 29, `期望 29，实际 ${skillDirs.length}`);
+a("30 个技能目录且 frontmatter 合法", () => {
+  assert(skillDirs.length === 30, `期望 30，实际 ${skillDirs.length}`);
   for (const d of skillDirs) {
     const raw = readFileSync(join(BUNDLE, "skills", d, "SKILL.md"), "utf-8");
     const m = raw.match(/^---\n([\s\S]*?)\n---\n/);
@@ -239,14 +239,17 @@ d("管线五环顺序正确（雷达→排期→发布→承接→分级→转�
   const want = ["intent-radar", "content-schedule", "dual-publish", "reception", "lead-grading", "coupon-convert", "attribution", "guest-retention", "funnel-review"];
   assert(JSON.stringify(keys) === JSON.stringify(want), `五环顺序 ${keys.join("→")}`);
 });
-d("三客群分型齐备且均含获客组", () => {
+d("四客群分型齐备；托管型三客群均含获客组", () => {
   const segs = Object.keys(segmentDefaults.segments);
-  assert(segs.length === 3, `客群数=${segs.length}`);
+  assert(segs.length === 4, `客群数=${segs.length}`);
   for (const [k, seg] of Object.entries(segmentDefaults.segments) as [string, { presets: string[]; skills_ordered: string[]; fence_patch: string }][]) {
-    for (const ap of ["ai-receptionist", "coupon-operator", "guest-success", "channel-watcher"])
-      assert(seg.presets.includes(ap), `${k} 缺获客员工 ${ap}`);
-    for (const sk of ["lead-concierge", "coupon-ops", "hotel-geo-content", "intent-radar"])
-      assert(seg.skills_ordered.includes(sk), `${k} 缺获客技能 ${sk}`);
+    // audit_only 为只读体检期（零风险先行，无写通道），不装配获客组——托管型客群才校验
+    if (k !== "audit_only") {
+      for (const ap of ["ai-receptionist", "coupon-operator", "guest-success", "channel-watcher"])
+        assert(seg.presets.includes(ap), `${k} 缺获客员工 ${ap}`);
+      for (const sk of ["lead-concierge", "coupon-ops", "hotel-geo-content", "intent-radar"])
+        assert(seg.skills_ordered.includes(sk), `${k} 缺获客技能 ${sk}`);
+    }
     assert(existsSync(join(BUNDLE, seg.fence_patch)), `${k} patch 缺失`);
   }
 });

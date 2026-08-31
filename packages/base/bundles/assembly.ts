@@ -5,9 +5,10 @@
  * 数据来源口径（P7-⑤）：槽位状态 = bundle 注册表投影（磁盘 bundles/<slug>/ 实物扫描）；
  * 校验结果 = 装配校验器运行记录（recheck/activate 留痕 biz_events，不静默 L9.2）。
  *
- * 六装配槽（P7E1/§2.2）：① 档案 Schema ② 对象与阶段枚举 ③ 工具集 ④ 围栏包 ⑤ Agent 班组 ⑥ 工作台 UI
+ * 七装配槽（P7E1/§2.2 + v3.0 第⑦槽）：① 档案 Schema ② 对象与阶段枚举 ③ 工具集 ④ 围栏包 ⑤ Agent 班组 ⑥ 工作台 UI ⑦ 模型路由策略
  * 起飞前检查单（P7E3/F2.10）：档案 forbidden 校验 / 枚举冲突检测 / 工具探针健康 /
  *   围栏绑定完整 / UI 用例同步 —— 任一失败拒绝激活；修复后重跑（数据活算，重查即重跑）。
+ *   第⑦槽 model-policy.yml 为非阻断校验：缺失 → 使用底座默认路由策略（L2.6）；存在但非法 → 标红拒绝激活。
  */
 import {
   existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync,
@@ -17,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import YAML from "yaml";
 import { gatewayAppend, gatewayAppendOnClient } from "../workdata/gateway.js";
+import { parseModelPolicy } from "../model-router/policy.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 /** 仓库 bundles/ 根（packages/base/bundles → 上三级）；测试可用 BUNDLES_ROOT 指到临时目录 */
@@ -28,7 +30,7 @@ export function bundlesRoot(): string {
 /** 已注册工作台页面（P7E3 ⑤「UI 用例同步」校验基准；新增页面须同步此表与 cases.json） */
 export const REGISTERED_PAGES = ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9"] as const;
 
-export type SlotId = "archive" | "enums" | "tools" | "fences" | "presets" | "ui";
+export type SlotId = "archive" | "enums" | "tools" | "fences" | "presets" | "ui" | "model-policy";
 export interface SlotState {
   id: SlotId;
   label: string;
@@ -39,7 +41,7 @@ export interface SlotState {
   /** 回链管理页（围栏包→P5；班组→P8） */
   go?: "p5" | "p8";
 }
-export type CheckKey = "archive" | "enums" | "tools" | "fences" | "ui";
+export type CheckKey = "archive" | "enums" | "tools" | "fences" | "ui" | "model_policy";
 export interface CheckItem {
   key: CheckKey;
   label: string;
@@ -149,12 +151,13 @@ interface BundleDiskAssets {
   isDraft: boolean;
   archiveSchema: { properties?: Record<string, unknown>; required?: string[] } | null;
   objectsJson: { objects?: Array<{ type: string; label: string }> } | null;
-  // D27：account_stages（账号生命周期）与内容 stages 并集均为合法枚举
-  stagesJson: { stages?: Array<{ id: string; label: string }>; account_stages?: Array<{ id: string; label: string }> } | null;
+  stagesJson: { stages?: Array<{ id: string; label: string }> } | null;
   presets: PresetYml[];
   fenceFiles: string[];
   fencePacks: FenceYml[];
   uiCases: UiCasesJson | null;
+  /** 第⑦槽：模型路由策略原文（缺失=null → 底座默认；非法 → 校验标红） */
+  modelPolicyText: string | null;
 }
 
 /**
@@ -188,6 +191,9 @@ function loadBundleDiskAssets(dir: string, slug: string): BundleDiskAssets {
       .map((f) => YAML.parse(readFileSync(join(fencesDir, f), "utf-8")) as FenceYml)
       .filter((f) => f?.version),
     uiCases: readJson(join(dir, "ui/cases.json")),
+    modelPolicyText: existsSync(join(dir, "model-policy.yml"))
+      ? readFileSync(join(dir, "model-policy.yml"), "utf-8")
+      : null,
   };
 }
 
@@ -230,14 +236,6 @@ async function computeAssemblyScoped(
   );
   const isActive = ws.rows[0]?.industry === slug;
 
-  // Bundle 自家工作区（D28：探针/围栏注册表须在 Bundle 属地查验——同租户 RLS 放行 workspaces，
-  // 非激活 Bundle 在他域视角不应恒红；无属地（未播种）则回退当前工作区，探针如实报缺）
-  const home = await client.query<{ id: string }>(
-    `SELECT id FROM workspaces WHERE tenant_id=$1 AND industry=$2 ORDER BY created_at NULLS LAST, id LIMIT 1`,
-    [scope.tenantId, slug],
-  );
-  const homeWsId = home.rows[0]?.id ?? scope.workspaceId;
-
   /* ---------- 槽① 档案 Schema + 校验① 档案 forbidden ---------- */
   const archiveSchema = assets.archiveSchema;
   const prof = isActive
@@ -268,8 +266,7 @@ async function computeAssemblyScoped(
   const objectsJson = assets.objectsJson;
   const stagesJson = assets.stagesJson;
   const objTypes = (objectsJson?.objects ?? []).map((o) => o.type);
-  // 工作区 stage 属账号生命周期口径（D27 修复：account_stages 与内容 stages 并集均为合法枚举）
-  const stageIds = [...(stagesJson?.stages ?? []), ...(stagesJson?.account_stages ?? [])].map((s) => s.id);
+  const stageIds = (stagesJson?.stages ?? []).map((s) => s.id);
   const dupObj = objTypes.filter((t, i) => objTypes.indexOf(t) !== i);
   const dupStage = stageIds.filter((t, i) => stageIds.indexOf(t) !== i);
   const stageConflict = isActive && ws.rows[0]?.stage && !stageIds.includes(ws.rows[0].stage)
@@ -292,15 +289,14 @@ async function computeAssemblyScoped(
   /* ---------- 槽③ 工具集 + 校验③ 工具探针健康 ---------- */
   const presets = assets.presets;
   const toolNames = [...new Set(presets.flatMap((p) => (p.tools ?? []).map((t) => t.name)))];
-  await client.query("SELECT set_config('app.workspace_id', $1, true)", [homeWsId]);
   const agentRows = presets.length > 0
     ? (await client.query<{
         id: string; preset_key: string; name: string; version: string;
         status: string; readonly: boolean; fence_bindings: string[];
       }>(
-        `SELECT a.id, a.preset_key, a.name, a.version, a.status, a.readonly, a.fence_bindings
-         FROM agents a WHERE a.workspace_id = $1 AND a.preset_key = ANY($2::text[]) ORDER BY a.preset_key`,
-        [homeWsId, presets.map((p) => p.preset_key!)],
+        `SELECT id, preset_key, name, version, status, readonly, fence_bindings
+         FROM agents WHERE workspace_id=$1 AND preset_key = ANY($2::text[]) ORDER BY preset_key`,
+        [scope.workspaceId, presets.map((p) => p.preset_key!)],
       )).rows
     : [];
   const probeFails: string[] = [];
@@ -328,7 +324,7 @@ async function computeAssemblyScoped(
     ? (await client.query<{ rule_id: string }>(
         `SELECT DISTINCT rule_id FROM fence_rules
          WHERE status='active' AND (workspace_id='*' OR workspace_id=$1)`,
-        [homeWsId],
+        [scope.workspaceId],
       )).rows.map((r) => r.rule_id)
     : [];
   const activeRules = new Set(fenceRuleRows);
@@ -361,8 +357,6 @@ async function computeAssemblyScoped(
       : { key: "fences", label: "围栏绑定完整", ok: true, slot: "fences",
           detail: `基线 ${baselineCount} 条 🔒 单调守卫 · ${agentsOut.filter((a) => !a.readonly).length} 员绑定全合法` };
 
-  await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
-
   /* ---------- 槽⑥ 工作台 UI + 校验⑤ UI 用例同步 ---------- */
   const uiCases = assets.uiCases;
   const cases = uiCases?.cases ?? [];
@@ -377,7 +371,25 @@ async function computeAssemblyScoped(
       : { key: "ui", label: "UI 用例同步", ok: true, slot: "ui",
           detail: `${casePages.length} 页 · 状态用例 ${cases.length} 条同步` };
 
-  const checks = [checkArchive, checkEnums, checkTools, checkFences, checkUi];
+  /* ---------- 槽⑦ 模型路由策略（v3.0：非阻断——缺失用底座默认；存在但非法 → 标红拒绝激活） ---------- */
+  let modelPolicyScenes = 0;
+  let checkModelPolicy: CheckItem;
+  if (assets.modelPolicyText === null) {
+    checkModelPolicy = { key: "model_policy", label: "模型路由策略", ok: true, slot: "model-policy",
+      detail: "未提供 model-policy.yml，使用底座默认路由策略（L2.6 行业可覆盖）" };
+  } else {
+    const parsed = parseModelPolicy(assets.modelPolicyText);
+    if (parsed.policy) {
+      modelPolicyScenes = Object.keys(parsed.policy.scenes).length;
+      checkModelPolicy = { key: "model_policy", label: "模型路由策略", ok: true, slot: "model-policy",
+        detail: `model-policy.yml 合法 · ${modelPolicyScenes} 场景（含底座继承）· 三档套餐映射` };
+    } else {
+      checkModelPolicy = { key: "model_policy", label: "模型路由策略", ok: false, slot: "model-policy",
+        detail: `model-policy.yml 非法：${parsed.issues.join("；")}`, fix: "修正场景表（tier 须为 L1/L2/L3）后重跑校验" };
+    }
+  }
+
+  const checks = [checkArchive, checkEnums, checkTools, checkFences, checkUi, checkModelPolicy];
   const failedSlots = new Set(checks.filter((c) => !c.ok).map((c) => c.slot));
 
   const slots: SlotState[] = [
@@ -396,6 +408,11 @@ async function computeAssemblyScoped(
         : "待填充", go: "p8" },
     { id: "ui", label: "⑥ 工作台 UI / 皮肤", filled: !!uiCases, failed: failedSlots.has("ui"),
       summary: uiCases ? `${casePages.length} 页 · 状态用例 ${cases.length} 条同步` : "待填充" },
+    { id: "model-policy", label: "⑦ 模型路由策略", filled: assets.modelPolicyText !== null,
+      failed: failedSlots.has("model-policy"),
+      summary: assets.modelPolicyText !== null
+        ? (checkModelPolicy.ok ? `model-policy.yml · ${modelPolicyScenes} 场景` : checkModelPolicy.detail)
+        : "底座默认（可经 model-policy.yml 覆盖）" },
   ];
 
   return {
@@ -588,6 +605,21 @@ export function scaffoldDraft(input: DraftInput, root = bundlesRoot()): void {
       provides: { presets: [], fences: [], skills: [], schemas: [], ui: [] },
     },
   }, null, 2)}\n`, "utf-8");
+  // 第⑦槽骨架：新行业默认继承底座路由策略，按行业特点增量覆盖场景即可
+  writeFileSync(join(dir, "model-policy.yml"), [
+    `# ${input.displayName} 模型路由策略（bundle 第⑦装配槽，v3.0）`,
+    `# 场景未点名时继承底座 DEFAULT_MODEL_POLICY；tier: L1(0.2×)/L2(1×)/L3(3×)`,
+    `version: "v3.0"`,
+    `scenes:`,
+    `  # 示例：`,
+    `  # cs-answer: { tier: L1, escalateOn: [low-confidence, thumbs-down] }`,
+    `  # deep-report: { tier: L3, noDowngrade: true }`,
+    `plans:`,
+    `  lite:     { defaultShift: -1 }   # 智享版：整体压一档`,
+    `  standard: { defaultShift: 0 }    # 标准版：标准混合`,
+    `  smart:    { defaultShift: 1 }    # 智能版：整体抬一档`,
+    ``,
+  ].join("\n"), "utf-8");
 }
 
 export function removeDraft(slug: string, root = bundlesRoot()): void {

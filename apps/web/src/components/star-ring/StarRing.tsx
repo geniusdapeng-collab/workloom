@@ -66,7 +66,7 @@ function ClapperIcon({ size = 24 }: { size?: number }) {
 
 /** 布局事件：通知 Bridge 预留右侧空间（全局状态+事件双通道，消除挂载时序竞争——F-ASK1） */
 function emitRailWidth(w: number) {
-  (window as unknown as { __askrailW?: number }).__askrailW = w;
+  (window as unknown as { __askRailW?: number }).__askRailW = w;
   window.dispatchEvent(new CustomEvent("askrail-width", { detail: { width: w } }));
 }
 

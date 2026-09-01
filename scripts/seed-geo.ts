@@ -586,7 +586,7 @@ async function main() {
   console.log("✓ 运行态剧本完成（情报/能见度/双域分发/私域/晨报/审批全量有数）");
 
   await owner.end();
-  console.log("\nWorkLoom GEO 双域演示种子完成。下一步：pnpm dev 后在舰桥查看（ws-geo 工作区）。");
+  console.log("\nWorkLoom GEO 双域演示种子完成。下一步：pnpm dev 后在工作台查看（ws-geo 工作区）。");
 }
 
 main().catch((err) => {

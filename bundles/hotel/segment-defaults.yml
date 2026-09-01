@@ -29,7 +29,7 @@ segments:
     - guest-profile-crm  # 线索流失点盘点（脱敏聚合，R24 同源）
     - finance-reporting  # 经营账：OCC/ADR/RevPAR 基线建档
     - morning-briefing  # 每日体检晨报（只读版决策包：发现/建议/风险三栏）
-    - night-audit-suite  # 夜间只读守夜：差评 SLA 扫描/价格巡检（发现进清晨决策包）
+    - night-audit-suite  # 夜间只读值守：差评 SLA 扫描/价格巡检（发现进清晨决策包）
     - handover-manager
     - incident-postmortem
     triggers_enabled:

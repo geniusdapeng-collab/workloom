@@ -12,6 +12,7 @@ import { ensureDemoLogin, trpc } from "../lib/trpc";
 import { EmergencyBrake, NightStatusPill } from "../components/hud";
 import { LiveTicker } from "../components/hud/LiveTicker";
 import { SimBanner } from "../components/SimBanner";
+import { SkillDistBanner } from "../components/SkillDistBanner";
 import { useAskRailPadding } from "../lib/useAskRail";
 import { COMMON_STATUS_TEXT, dictText } from "../lib/display";
 import { PlanSwitcher } from "./PlanSwitcher";
@@ -134,6 +135,7 @@ export function Bridge({
 
           {/* 模拟数据横幅（D24：模拟态/mock 模型常显，引导落地向导接入真实数据） */}
           <SimBanner />
+          <SkillDistBanner />
 
           {/* IM 三栏（§4.1：236px 左｜弹性中｜264px 右；栏间 1px 全息青细线=border-line） */}
           <div className="flex min-h-[640px]">

@@ -1,5 +1,10 @@
 # Changelog
 
+## [base-sync-1.11.0] - 2026-09-02 · 基座同步：技能保鲜环 P0（下行分发通道）
+
+> 自 workloom-im@1.11.0 同步（vendored 基座公共段一致）：packages/base/skill-ops 全量 + 迁移 0018 + skills.skillOps.* 路由 + suite Y 域用例。
+> 门禁：typecheck 全绿 · vitest skill-ops 19/19（含 RUN_DB_TESTS=1 PG 集成）· suite 全绿。
+
 ## [3.5.0] - 2026-08-25 · Candy Design System v1.0：视觉规范标准 + 舰队术语清理 + 四仓推广
 
 ### 视觉规范标准（docs/design-system.md）

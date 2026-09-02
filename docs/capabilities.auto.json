@@ -1,7 +1,7 @@
 {
  "repo": "workloom-ai-acquisition",
  "description": "WorkLoom 获客系统 · 短视频社媒营销 × GEO × 获客五环 × 行业运营（首垂直：酒店）",
- "generatedAt": "2026-08-29T08:24:06.770Z",
+ "generatedAt": "2026-09-02T08:45:00.008Z",
  "demoPages": [
   "geo-customer-app.html",
   "geo-demo-c.html",
@@ -218,9 +218,9 @@
      "desc": "对外产品故事"
     },
     {
-     "name": "自带技能 ×7",
+     "name": "自带技能 ×8",
      "how": "skills/official/",
-     "desc": "cross-platform-review / deal-flow / demo-mirror / industry-entry 等"
+     "desc": "component-integration / cross-platform-review / deal-flow / demo-mirror 等"
     },
     {
      "name": "能力导览 PPT",

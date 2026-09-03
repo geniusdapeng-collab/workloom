@@ -2,7 +2,7 @@
 # 定位：意图雷达——竞对评论区/OTA差评/query 搜索词/本店评论私信中萃取住宿意图，
 # 每周产出《意图雷达报告》反向指挥内容排期；兼酒店词 GEO 能见度监测（geo-growth 模式酒店特化）
 preset_key: channel-watcher
-name: 渠道哨兵Agent
+name: 渠道哨兵官
 version: v1.0
 kind: intelligence
 description: 意图雷达与酒店词能见度监测。竞对评论区热问采集；OTA 差评关键词聚类（对手的差评就是自己的选题）；「杭州亲子酒店/西湖边酒店怎么选」类 query 集周频采集（豆包/DeepSeek/元宝/ChatGPT）；本店被提及率/首推率/SOV 周报复盘；意图信号输出给 content-agent 作选题输入。

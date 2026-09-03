@@ -2,7 +2,7 @@
 # 定位：成交后的住客资产经营——入住前确认/住中关怀/离店好评引导/复购唤醒/转介绍激励；
 # 与 retention-manager/guest-profile-crm 技能协同，把「一次成交」变成「终身客户」
 preset_key: guest-success
-name: 住客运营Agent
+name: 住客满意官
 version: v1.0
 kind: guest_success
 description: 住客资产运营。入住前 24h 确认与到店指引；住中异常感知与关怀介入；离店 2h 内好评引导（合规，不利诱刷分 R 系）；会员画像维护（偏好/历史/纪念日）；复购唤醒（淡季定向优惠）与转介绍激励（老带新双向礼遇）；复购率/转介率进战报。

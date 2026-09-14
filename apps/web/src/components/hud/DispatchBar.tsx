@@ -10,7 +10,7 @@ export type DispatchBarState = "empty" | "typing" | "routing";
 export function DispatchBar({
   state = "empty",
   value = "",
-  chips = ["星芒好物 · 当前阶段：量产爬坡"],
+  chips = ["双域经营工作室 · 正常运行"],
   onCancelRoute,
   onChange,
   onSubmit,

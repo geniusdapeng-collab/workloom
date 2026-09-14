@@ -44,14 +44,14 @@ interface ArchiveShape {
 }
 interface ProfileResp { archive: ArchiveShape; stage: string | null; name: string }
 
-/** 视频创作 6 快捷目标（行业 Bundle 预置：选题/脚本/评论/排期/合规/渲染；渲染进度直跳 P10 片库） */
+/** GEO 双域增长快捷目标（与 bundles/geo-growth 岗位一一对应）。 */
 const QUICK_GOALS: Array<{ label: string; text: string; preset: string; to?: string }> = [
-  { label: "选题拆解", text: "拆解本周同类目爆款选题，给我 3 个可拍方向", preset: "trend-researcher" },
-  { label: "起草脚本", text: "为「保温杯种草片」起草一版 3 镜脚本", preset: "scriptwriter" },
-  { label: "评论分流", text: "把抖音评论区差评按三级分流并起草回复", preset: "comment-operator" },
-  { label: "今日发布排期", text: "排一下今天各账号的发布排期", preset: "publish-operator" },
-  { label: "素材合规检查", text: "检查待发素材的合规风险（功效宣称/版权）", preset: "field-inspector" },
-  { label: "渲染进度", text: "汇报当前渲染队列进度与预计完成时间", preset: "render-operator", to: "/p10" },
+  { label: "能见度扫描", text: "扫描品牌核心词在 AI 搜索中的能见度与异常", preset: "visibility-watcher" },
+  { label: "引用源分析", text: "分析本周高价值引用源并给出补强建议", preset: "citation-analyst" },
+  { label: "GEO 选题", text: "生成本周 GEO 内容选题与证据清单", preset: "geo-content-planner" },
+  { label: "实体一致性", text: "检查品牌实体信息在各渠道是否一致", preset: "entity-inspector" },
+  { label: "私域承接", text: "复盘公域线索到私域的承接效果", preset: "private-domain-operator" },
+  { label: "经营复盘", text: "汇总双域增长数据并给出下周行动建议", preset: "review-analyst" },
 ];
 
 const THREAD_DOT: Record<string, string> = {
@@ -145,7 +145,7 @@ export default function P1() {
   }, [profile, insp]);
 
   /* ---------- 派遣（P1E1：含糊→反问不建任务 F3.2；成功→完成后态新线程顶部 0/y 蓝呼吸 F3.4） ---------- */
-  const dispatch = useCallback(async (text: string, presetKey = "trend-researcher") => {
+  const dispatch = useCallback(async (text: string, presetKey = "geo-researcher") => {
     if (!text.trim()) return;
     setDispatchState("routing");
     setClarify(null);
@@ -420,7 +420,7 @@ export default function P1() {
           <DispatchBar
             state={dispatchState}
             value={draft}
-            chips={[profile?.archive?.brand ?? "视频经理 · 演示工作室", `阶段：${profile?.stage ?? "—"}`]}
+            chips={[profile?.name ?? "双域经营工作室", `阶段：${profile?.stage ?? "—"}`]}
             onCancelRoute={() => setDispatchState(draft ? "typing" : "empty")}
             onChange={(v) => { setDraft(v); setDispatchState(v ? "typing" : "empty"); }}
             onSubmit={() => void dispatch(draft)}

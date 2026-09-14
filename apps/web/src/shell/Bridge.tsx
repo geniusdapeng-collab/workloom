@@ -123,9 +123,9 @@ export function Bridge({
               {left ?? (<>
               <div className="mb-2 px-1 text-[11px] tracking-[.2em] text-ink3">会话 · THREADS</div>
               {[
-                { id: "T-101", title: "保温杯种草片·三镜渲染", status: "running", cls: "text-holo" },
-                { id: "T-102", title: "抖音评论区差评分流", status: "pending_review", cls: "text-warn" },
-                { id: "T-103", title: "早八点账号日报", status: "completed", cls: "text-go" },
+                { id: "T-101", title: "品牌能见度扫描", status: "running", cls: "text-holo" },
+                { id: "T-102", title: "引用源补强审批", status: "pending_review", cls: "text-warn" },
+                { id: "T-103", title: "双域经营日报", status: "completed", cls: "text-go" },
               ].map((t) => (
                 <div
                   key={t.id}

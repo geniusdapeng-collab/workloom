@@ -8,6 +8,8 @@ readonly: false
 night_shift: false
 high_risk: true
 fence_bindings: [G-GEO1, G-GEO2, G-GEO3, G16, G20]
+coverage:
+  - { eventPrefix: "source.", label: 信源分发 }
 skills: []
 tools:
   - { name: rpa.source_publish, access: write, desc: 信源平台 RPA 分发（知乎/百科/新闻源/垂媒/公众号） }

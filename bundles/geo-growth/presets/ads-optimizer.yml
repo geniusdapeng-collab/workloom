@@ -8,6 +8,8 @@ readonly: false
 night_shift: true
 high_risk: false
 fence_bindings: [G12]
+coverage:
+  - { eventPrefix: "ads.", label: 广告优化 }
 skills: []
 tools:
   - { name: ads.watch, access: read, desc: Meta/千川投放数据盯盘（夜班跨时区） }

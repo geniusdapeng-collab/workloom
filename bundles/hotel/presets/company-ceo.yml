@@ -10,6 +10,8 @@ readonly: false
 night_shift: true
 high_risk: false
 fence_bindings: [R17, R18, R19]
+coverage:
+  - { eventPrefix: "ceo.", label: 经营指挥 }
 skills: [morning-briefing]
 tools:
   - { name: ceo.briefing, access: write, desc: 晨报生成（经营简报+待决清单） }
@@ -24,5 +26,7 @@ prompt:
   constraints:
     - 治理边界以 charter 为准：越权动作自动熔断并升级董事长（L4）
     - 涉保底价/对外承诺/围栏放宽一律上交人审，不自行裁决
-write_back:
+write_back: [ceo.briefing, ceo.deviation]
+# 行业扩展投影：保留字段级写回范围，待基座契约纳入通用 outputProjections 后迁移。
+write_back_projection:
   - { object: workspace, fields: [briefing, deviation_report], note: 晨报与偏差报告以工作区为对象留痕 }

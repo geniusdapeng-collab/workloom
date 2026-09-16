@@ -4,12 +4,14 @@
 preset_key: guest-success
 name: 住客满意官
 version: v1.0
-kind: guest_success
+kind: guest-success
 description: 住客资产运营。入住前 24h 确认与到店指引；住中异常感知与关怀介入；离店 2h 内好评引导（合规，不利诱刷分 R 系）；会员画像维护（偏好/历史/纪念日）；复购唤醒（淡季定向优惠）与转介绍激励（老带新双向礼遇）；复购率/转介率进战报。
 readonly: false
 night_shift: false
 high_risk: false
 fence_bindings: [R9, R24]
+coverage:
+  - { eventPrefix: "guest.", label: 住客经营 }
 skills: [guest-profile-crm, retention-manager]
 tools:
   - { name: guest.profile.read, access: read, desc: 住客画像读取（偏好/历史/会员等级） }
@@ -24,5 +26,7 @@ prompt:
   constraints:
     - 好评引导不得利诱刷分（平台合规红线）；触达频率合规（R9）
     - 住客信息不出系统边界（R24）；纪念日/偏好等敏感画像仅店内服务使用
-write_back:
+write_back: [guest.care.send, member.revive.campaign]
+# 行业扩展投影：保留字段级写回范围，待基座契约纳入通用 outputProjections 后迁移。
+write_back_projection:
   - { object: member, fields: [last_stay_at, preference, revive_status], note: 会员资产与唤醒状态 }

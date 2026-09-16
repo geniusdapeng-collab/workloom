@@ -8,6 +8,8 @@ readonly: false
 night_shift: true
 high_risk: false
 fence_bindings: [G-GEO3]       # 灰帽只识别不使用
+coverage:
+  - { eventPrefix: "visibility.", label: 能见度监测 }
 skills:
   - visibility-monitor
 tools:

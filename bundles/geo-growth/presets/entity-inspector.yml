@@ -8,6 +8,8 @@ readonly: false
 night_shift: true
 high_risk: false
 fence_bindings: [G-GEO2]
+coverage:
+  - { eventPrefix: "entity.", label: 实体一致性 }
 skills:
   - entity-consistency-check
 tools:

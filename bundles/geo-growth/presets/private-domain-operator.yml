@@ -14,6 +14,8 @@ fence_bindings:
 - G10d
 - G15
 - G20
+coverage:
+  - { eventPrefix: "inquiry.", label: 私域承接 }
 skills:
 - dual-entry-inquiry
 tools:

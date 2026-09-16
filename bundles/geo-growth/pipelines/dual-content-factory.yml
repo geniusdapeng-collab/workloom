@@ -8,7 +8,7 @@ schedule: daily
 steps:
   - step_key: script-package
     name: 脚本成套输出
-    owner: scriptwriter
+    owner: geo-scriptwriter
     outputs: [script_package]         # 脚本+标题+文案+标签+分镜，预留 AI 答案适配版接口位
   - step_key: production-split
     name: 实拍/AI 生成分流编排

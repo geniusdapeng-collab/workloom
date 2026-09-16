@@ -10,6 +10,8 @@ readonly: false
 night_shift: true
 high_risk: false
 fence_bindings: [R21, R23, R24, R25]
+coverage:
+  - { eventPrefix: "lead.", label: 线索接待 }
 skills: [lead-concierge]
 tools:
   - { name: comment.intent.scan, access: read, desc: 评论区获客意图识别（怎么订/多少钱/在哪/求链接） }
@@ -27,5 +29,7 @@ prompt:
     - 房价/优惠/权益承诺一律先过人审（R21）；口径与一店一档逐字一致（R25）
     - 客资明文不出系统（R24 block）；批量导出/外发必审（R23）
     - 答不了的（超 FAQ 口径）如实说「我请店长来答」，不编造（E2.1）
-write_back:
+write_back: [lead.capture, lead.grade]
+# 行业扩展投影：保留字段级写回范围，待基座契约纳入通用 outputProjections 后迁移。
+write_back_projection:
   - { object: lead, fields: [source_chain, intent, grade, owner, follow_status], note: 线索主档与跟进状态 }

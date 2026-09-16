@@ -29,6 +29,7 @@ extraMetadata:
   main: apps/desktop/electron/main.cjs
   name: workloom-geo
   productName: WorkLoom GEO
+  workloomPortOffset: 410
 asar: true
 # 产物名带平台与架构、**不带版本号**——文件名恒定才能支撑
 # https://github.com/<org>/<repo>/releases/latest/download/<文件名> 永久直链

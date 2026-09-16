@@ -8,6 +8,8 @@ readonly: false
 night_shift: true
 high_risk: false
 fence_bindings: [G17, G18]
+coverage:
+  - { eventPrefix: "ceo.group.", label: 集团经营指挥 }
 skills: []
 tools:
   - { name: fleet.aggregate, access: read, desc: 多客户经营数据聚合（跨工作区只读） }

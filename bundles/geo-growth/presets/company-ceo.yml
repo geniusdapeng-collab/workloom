@@ -8,6 +8,8 @@ readonly: false
 night_shift: true
 high_risk: false
 fence_bindings: [G17, G18]
+coverage:
+  - { eventPrefix: "ceo.company.", label: 公司经营指挥 }
 skills: []
 tools:
   - { name: ceo.briefing, access: write, desc: 晨报/周报/月报全稿产出（人只签发） }

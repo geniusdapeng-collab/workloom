@@ -4,12 +4,14 @@
 preset_key: coupon-operator
 name: 团购运营官
 version: v1.0
-kind: coupon_ops
+kind: coupon-ops
 description: 团购券全周期运营。券 SKU 设计（房型+权益+有效期+不可用日）与上架；库存与日销限监控，售罄/下架即熔断相关投放与口播（R22）；券定价不低于红线（R26）；核销与 PMS/平台对账，核销率异常告警；券带来的预约单联动房态（满房日期自动关券）。
 readonly: false
 night_shift: false
 high_risk: false
 fence_bindings: [R22, R26, R2, R25]
+coverage:
+  - { eventPrefix: "coupon.", label: 团购运营 }
 skills: [coupon-ops]
 tools:
   - { name: coupon.create, access: write, desc: 券 SKU 创建（定价红线 R26：不低于保底价×0.85） }
@@ -24,5 +26,7 @@ prompt:
   constraints:
     - 券价 < 保底价×0.85 直接熔断（R26）；售罄/下架后相关投放口播不停 → 熔断（R22）
     - 券文案权益口径与一店一档一致（R25），不夸大不隐藏限制条件
-write_back:
+write_back: [coupon.create, coupon.publish]
+# 行业扩展投影：保留字段级写回范围，待基座契约纳入通用 outputProjections 后迁移。
+write_back_projection:
   - { object: coupon_sku, fields: [price, stock, status, sales, verified], note: 券主档与库存销售核销状态 }

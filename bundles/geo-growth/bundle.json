@@ -62,7 +62,9 @@
       "ui": [
         "ui/cases.json"
       ],
-      "serviceFront": [],
+      "serviceFront": [
+        "service-front/client.json"
+      ],
       "seeds": [],
       "pipelines": [
         "pipelines/dual-content-factory.yml",
@@ -155,7 +157,7 @@
   },
   "integrity": {
     "algorithm": "sha256",
-    "digest": "d4d81ed0ec4c13de4083ea424b03fca599a6bdd8ee54b27bd4caeb9f63998bca",
+    "digest": "752fdddbdd245c27dcc28fc6b2490b89d0755ad51c556478335186f7c8ab585d",
     "assets": {
       "fences/geo-growth-baseline.yml": "26132b3c52290db8bfae71e7eacca25632adac48ec1dd2a6005749e9b015c44e",
       "pipelines/dual-content-factory.yml": "1a8001d651765cc36deccc1a71659b270a9301d3b2f20509fc7d7d22ab3d713f",
@@ -181,6 +183,7 @@
       "schemas/archive.schema.json": "ad08672042078f5d8a2376f855e0fe936454048fb0e4cc421d5b8082ad4e2200",
       "schemas/objects.json": "656242d97a63158e9df3453fc7e693e4d5322379514750bdfd5f426cc581cc5b",
       "schemas/stages.json": "dbb994a399bcfe9ea34fbeacda92a13bfdebb8caeef4f74960faf4461a447c93",
+      "service-front/client.json": "ed223ea9d0721fbafc29eca8e2259119bb3e96b386ccb3aee07ac63f20432038",
       "skills/ai-answer-rewrite/SKILL.md": "25d1597948d560a13262a91c360abd130f5e6debe2e9faff7d4de2bc9640833d",
       "skills/citation-reverse/SKILL.md": "ba3350d65c2c0c3fc2b588965ef36abeed39caea53a071c55ce8c3b748fae47b",
       "skills/dual-entry-inquiry/SKILL.md": "b3aba600d3ce22d3b25bd5e222eac78f91a41cdc55de4699801acdec5754db88",

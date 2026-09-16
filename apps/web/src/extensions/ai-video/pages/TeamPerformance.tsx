@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { SkeletonBlock } from "../../../components/hud";
+import { Skeleton } from "../../../components/hud";
 import { ensureDemoLogin, trpc } from "../../../lib/trpc";
 import { Bridge } from "../../../shell/Bridge";
 import { EmployeeCardDrawer, type EmployeeRow } from "../components/team/EmployeeCardDrawer";
@@ -35,7 +35,7 @@ export default function TeamPerformance() {
         </div>
         <HostAgent presetKey="company-ceo" fallbackName="公司负责人" />
       </div>
-      {!ready ? <SkeletonBlock lines={5} /> : (
+      {!ready ? <Skeleton count={5} /> : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {team.agents.map((agent) => (
             <button key={agent.id} type="button" onClick={() => navigate(`/ai-video/team-performance/${encodeURIComponent(agent.id)}`)} className="min-w-0 rounded-lg border border-line bg-card p-3 text-left hover:border-gline">

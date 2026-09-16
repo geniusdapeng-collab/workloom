@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { ensureDemoLogin, trpc } from "../../../lib/trpc";
 import { Bridge } from "../../../shell/Bridge";
-import { BannerAlert, EmptyState, SkeletonBlock } from "../../../components/hud";
+import { BannerAlert, EmptyState, Skeleton } from "../../../components/hud";
 
 interface ScriptRow {
   id: string; project_id: string; shot_id: string; script_key: string; version: number;
@@ -269,7 +269,7 @@ export default function P10() {
         )}
 
         {!ready ? (
-          <SkeletonBlock lines={5} h={72} /> /* 加载态 G10 */
+          <Skeleton count={5} height={72} /> /* 加载态 G10 */
         ) : chains.length === 0 ? (
           <EmptyState icon="🎬" title="片库空空如也" hint="营销片管线走到预生产后，提示词工程师会逐镜交付渲染脚本、结构化镜头信息和字数快照。" />
         ) : (
@@ -293,7 +293,7 @@ export default function P10() {
             </div>
 
             {!detail ? (
-              <SkeletonBlock lines={4} h={56} />
+              <Skeleton count={4} height={56} />
             ) : (
               <div className="rounded-lg border border-line bg-card p-4">
                 {/* 工作台头：镜头 / 版本链 / 状态 / 字数校验 */}

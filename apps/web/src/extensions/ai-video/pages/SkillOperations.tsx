@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { BannerAlert, SkeletonBlock } from "../../../components/hud";
+import { BannerAlert, Skeleton } from "../../../components/hud";
 import { ensureDemoLogin, trpc } from "../../../lib/trpc";
 import { Bridge } from "../../../shell/Bridge";
 import { EvolutionZone } from "../components/skills/EvolutionZone";
@@ -60,7 +60,7 @@ export default function SkillOperations() {
         <p className="mt-1 break-words text-caption text-ink3">按经营阶段发现、组合、校准并生产视频行业技能。</p>
       </div>
       {message ? <div className="mb-3"><BannerAlert level="info" actionLabel="知道了" onAction={() => setMessage(null)}>{message}</BannerAlert></div> : null}
-      {!ready ? <SkeletonBlock lines={5} /> : (
+      {!ready ? <Skeleton count={5} /> : (
         <>
           <StageRecommendBar stage={stage} officials={officials} installedSet={installedSet} busy={busy} canManage={canManage} onInstall={(id) => void install(id)} />
           <SkillChains skills={skills} onToast={setMessage} />

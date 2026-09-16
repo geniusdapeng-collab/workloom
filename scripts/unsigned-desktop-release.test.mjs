@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -73,11 +74,11 @@ test("signed 与 unsigned 平台校验边界清晰", () => {
 });
 
 test("平台任务只封存同 run/attempt 候选，唯一 publisher 原子发布五资产", () => {
-  assert.match(builder, /artifactName: "\$\{productName\}-\$\{os\}-\$\{arch\}\.\$\{ext\}"/u);
+  assert.match(builder, /artifactName: "WorkLoom\.GEO-\$\{os\}-\$\{arch\}\.\$\{ext\}"/u);
   assert.match(workflow, /--mac dmg --arm64/u);
   assert.match(workflow, /--mac dmg --x64/u);
   assert.match(workflow, /--win nsis --x64/u);
-  assert.equal(workflow.match(/desktop-release-finalizer\.mjs seal-platform/gu)?.length, 2);
+  assert.equal(workflow.match(/node scripts\/desktop-release-finalizer\.mjs seal-platform/gu)?.length, 2);
   for (const marker of [
     'desktop-macos-candidate-${{ github.run_id }}-${{ github.run_attempt }}',
     'desktop-windows-candidate-${{ github.run_id }}-${{ github.run_attempt }}',
@@ -107,6 +108,14 @@ test("平台任务只封存同 run/attempt 候选，唯一 publisher 原子发�
 
 test("Release 标题与当前仓库、稳定 tag 绑定", () => {
   assert.ok(workflow.includes('--title "${GITHUB_REPOSITORY#*/} $RELEASE_TAG"'));
+});
+
+test("唯一 publisher 与基座 PR30 canonical 模板逐字节同源", () => {
+  const marker = "  # WorkLoom 下游桌面正式发行的唯一写入 job 模板。";
+  const start = workflow.indexOf(marker);
+  assert.notEqual(start, -1);
+  const publisher = `${workflow.slice(start).split("\n").map((line) => line.startsWith("  ") ? line.slice(2) : line).join("\n")}`;
+  assert.equal(createHash("sha256").update(publisher).digest("hex"), "e9065a08afc698696430e8a8c3c2607e6019c23812fa673559ac7981e7e41bc0");
 });
 
 test("桌面产品身份、端口和签名配置与产品清单一致", () => {

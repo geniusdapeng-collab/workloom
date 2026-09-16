@@ -403,6 +403,11 @@ jobs:
           retention-days: 1
           compression-level: 0
 
+  # WorkLoom 下游桌面正式发行的唯一写入 job 模板。
+  #
+  # 消费约束：调用工作流必须提供 preflight/macos/windows 三个 job；两个平台 job 先用
+  # scripts/desktop-release-finalizer.mjs seal-platform 生成同一 run/attempt 的候选 Artifact。
+  # 本 job 刻意不 checkout、不安装依赖、不执行仓库脚本；contents:write 只接触已验真的候选字节。
   publish-desktop-release:
     needs: [preflight, macos, windows]
     runs-on: ubuntu-latest

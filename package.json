@@ -37,7 +37,7 @@
     "capabilities": "node scripts/generate-capabilities.mjs",
     "capabilities:check": "node scripts/generate-capabilities.mjs --check",
     "capabilities:pptx": "python3 scripts/build-capability-pptx.py",
-    "postinstall": "node scripts/postinstall-note.js || true",
+    "postinstall": "pnpm -C packages/industry-contract build && (node scripts/postinstall-note.js || true)",
     "overview:pptx": "python3 scripts/build-overview-pptx.py",
     "oss:watch": "bash scripts/oss-watch.sh",
     "oss:plan": "bash scripts/oss-watch.sh --show",
@@ -70,7 +70,7 @@
       "node-pty"
     ],
     "overrides": {
-      "@workloom/ui@0.1.1": "https://github.com/geniusdapeng-collab/workloom-im/releases/download/ui-v0.1.1/workloom-ui-0.1.1.tgz"
+      "@workloom/ui@0.1.1": "https://cnb.cool/workloom-ai/workloom-im/-/releases/download/ui-v0.1.1/workloom-ui-0.1.1.tgz"
     }
   },
   "devDependencies": {

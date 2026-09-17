@@ -8,7 +8,7 @@
 你只做三件事：**定方向、拍板、收钱。**
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-9A7B2D)](LICENSE)
-[![GitHub](https://img.shields.io/badge/repo-workloom-1B2A4E)](https://github.com/geniusdapeng-collab/workloom)
+[![GitHub](https://img.shields.io/badge/repo-workloom-1B2A4E)](https://github.com/workloom-ai/workloom)
 
 </div>
 
@@ -189,7 +189,7 @@ AI 搜索月活破 8.2 亿、AI 问答流量占比首超传统搜索——客户
 ### 一键跑起来（推荐）
 
 ```bash
-git clone https://github.com/geniusdapeng-collab/workloom.git
+git clone https://github.com/workloom-ai/workloom.git
 cd workloom
 pnpm setup && pnpm preview:all
 ```

@@ -4,7 +4,7 @@
   "role": "industry",
   "displayName": "WorkLoom 获客增长系统",
   "packageName": "workloom-ai-acquisition",
-  "repository": "geniusdapeng-collab/workloom",
+  "repository": "workloom-ai/workloom",
   "defaultBundle": "geo-growth",
   "demoWorkspaceSlug": "geo-growth",
   "demoMemberNo": "MEM-G01",

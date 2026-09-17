@@ -3,7 +3,7 @@
   "product": {
     "productId": "workloom-ai-acquisition",
     "role": "industry",
-    "repository": "geniusdapeng-collab/workloom",
+    "repository": "workloom-ai/workloom",
     "includePlatformOps": false
   },
   "npmVersion": "11.17.0",

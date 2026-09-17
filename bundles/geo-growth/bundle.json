@@ -1,0 +1,196 @@
+{
+  "schemaVersion": "workloom.bundle/v1",
+  "name": "@workloom/geo-growth",
+  "version": "1.0.0",
+  "workloom": {
+    "industry": "geo-growth",
+    "displayName": "WorkLoom GEO · 社媒短视频营销 × GEO 双域融合经营系统",
+    "description": "社媒短视频营销与生成式搜索优化双域经营候选包：数字员工、围栏、技能、对象和三端行业投影；以精确版本组合酒店与智能视频能力。",
+    "status": "candidate",
+    "owner": "WorkLoom 获客增长产品组",
+    "example": false,
+    "compatibility": {
+      "base": ">=0.1.0 <1.0.0",
+      "ui": ">=0.1.0 <1.0.0",
+      "contract": "2.0.0"
+    },
+    "dependencies": [
+      {
+        "bundleId": "hotel",
+        "version": "3.4.0"
+      },
+      {
+        "bundleId": "ai-video",
+        "version": "1.0.0"
+      }
+    ],
+    "provides": {
+      "presets": [
+        "presets/geo-researcher.yml",
+        "presets/citation-analyst.yml",
+        "presets/scriptwriter.yml",
+        "presets/production-planner.yml",
+        "presets/geo-content-planner.yml",
+        "presets/entity-inspector.yml",
+        "presets/publish-operator.yml",
+        "presets/source-distributor.yml",
+        "presets/ads-optimizer.yml",
+        "presets/data-board-officer.yml",
+        "presets/visibility-watcher.yml",
+        "presets/review-analyst.yml",
+        "presets/customer-success.yml",
+        "presets/private-domain-operator.yml",
+        "presets/company-ceo.yml",
+        "presets/group-ceo.yml"
+      ],
+      "fences": [
+        "fences/geo-growth-baseline.yml"
+      ],
+      "skills": [
+        "skills/geo-query-craft/SKILL.md",
+        "skills/ai-answer-rewrite/SKILL.md",
+        "skills/visibility-monitor/SKILL.md",
+        "skills/citation-reverse/SKILL.md",
+        "skills/entity-consistency-check/SKILL.md",
+        "skills/dual-entry-inquiry/SKILL.md"
+      ],
+      "schemas": [
+        "schemas/objects.json",
+        "schemas/stages.json",
+        "schemas/archive.schema.json"
+      ],
+      "ui": [
+        "ui/cases.json"
+      ],
+      "serviceFront": [
+        "service-front/client.json"
+      ],
+      "seeds": [],
+      "pipelines": [
+        "pipelines/dual-content-factory.yml",
+        "pipelines/intel-fusion.yml",
+        "pipelines/ops-rhythm.yml",
+        "pipelines/visibility-watch.yml"
+      ],
+      "library": [],
+      "segmentDefaults": [],
+      "connectors": []
+    },
+    "ui": {
+      "schemaVersion": "workloom.bundle.ui/v1",
+      "terminology": {
+        "businessObject": "获客经营事项",
+        "customer": "潜在客户",
+        "operation": "获客经营"
+      },
+      "navigation": {
+        "slots": []
+      },
+      "home": {
+        "widgets": [
+          {
+            "slot": "home.quick-tasks",
+            "component": "QuickTaskList",
+            "clients": [
+              "pc",
+              "b-mobile"
+            ],
+            "props": {
+              "tasks": [
+                "查看今日获客线索",
+                "复核双域内容",
+                "跟进转化任务",
+                "查看归因复盘"
+              ]
+            }
+          }
+        ]
+      },
+      "welcome": {
+        "system": [
+          "这是一套把短视频触达、生成式搜索曝光、线索承接与归因复盘连接起来的智能获客经营系统。"
+        ],
+        "keywords": [
+          "意图洞察",
+          "双域触达",
+          "线索转化",
+          "归因复盘"
+        ]
+      },
+      "objects": [
+        "市场意图",
+        "内容任务",
+        "客户线索",
+        "转化机会",
+        "归因记录"
+      ],
+      "workflows": [
+        "意图洞察",
+        "双域触达",
+        "线索承接",
+        "转化跟进",
+        "归因复盘"
+      ],
+      "serviceFront": {
+        "enabled": true,
+        "identityPolicy": "disabled",
+        "tabs": [
+          "对话",
+          "工单",
+          "消息",
+          "我的"
+        ],
+        "services": []
+      },
+      "inspection": {
+        "enabled": false
+      },
+      "theme": {
+        "brand": {
+          "primary": "#0f766e",
+          "accent": "#f59e0b"
+        }
+      },
+      "permissions": [],
+      "experiments": []
+    }
+  },
+  "integrity": {
+    "algorithm": "sha256",
+    "digest": "752fdddbdd245c27dcc28fc6b2490b89d0755ad51c556478335186f7c8ab585d",
+    "assets": {
+      "fences/geo-growth-baseline.yml": "26132b3c52290db8bfae71e7eacca25632adac48ec1dd2a6005749e9b015c44e",
+      "pipelines/dual-content-factory.yml": "1a8001d651765cc36deccc1a71659b270a9301d3b2f20509fc7d7d22ab3d713f",
+      "pipelines/intel-fusion.yml": "17a1b4c6dc70e47da0dffa1d91b96da2eb84925435009b9dd4b6e72eae22d092",
+      "pipelines/ops-rhythm.yml": "8a007c4de76d10830a05ef992bd7629399f6b0121fc6bf7ba1f5534c76857f78",
+      "pipelines/visibility-watch.yml": "c0f354e30fff3bd0f153eaf08c532c8159713b4b5ac590f3d4b79ccc6f4fda5c",
+      "presets/ads-optimizer.yml": "1c562d53e931ef922f71b44ead21bd33a3905f2befdfe1f9f6177d06cf2ed2e2",
+      "presets/citation-analyst.yml": "1267ce24d140fbf727e95be59a8b5e098b1829bfd2853c4010baddabb56750c1",
+      "presets/company-ceo.yml": "95c9c568c3aa95e7eb690dbd0325b6087f653046ccf1868a12cbac7a9c8a3b92",
+      "presets/customer-success.yml": "c939271088f6c4f619cc5d96e640a82b40bd726cd85540f50d1e27a0bd35954d",
+      "presets/data-board-officer.yml": "3640838aacc1aa89b1e092410ec445ce133877ee8dbacfaaa5ff733a581c36fb",
+      "presets/entity-inspector.yml": "1b6d5e631ffdcbd5bb2e0517ac65caf94eeb5d7625f50f12bad8e743358d068d",
+      "presets/geo-content-planner.yml": "850c3b152b1e0d31bebe8ba58d1fd0a4df3601fe02b0c7f2029cff03e7ee28d7",
+      "presets/geo-researcher.yml": "942b41b3a1a6e330f5a72c09763406a235b4c0cea5abcf7619fc07f058f857de",
+      "presets/group-ceo.yml": "5026be4c99ed4200c5bbfa0de9a48596305f582d04cb6cb1d9a53a50070d97c6",
+      "presets/private-domain-operator.yml": "6f351e045ff799506245e1f18883d16a59f1330bfedf70242de1d97d5ea542bc",
+      "presets/production-planner.yml": "67d7cb2933a2a7603d70664b1e0fc78488fa4f20ff96aea56d6c24468193697e",
+      "presets/publish-operator.yml": "6a5e56a32dec37016a46e95614f51e60cf32e6ba51de3f80fbaa211bb5529137",
+      "presets/review-analyst.yml": "a3130f43b0f48a2b63d58160e33a11c6ed7b90f8f6e8c55e565446dffa44ad1d",
+      "presets/scriptwriter.yml": "5daa921b76a54af0b253296ea24e897f71629fc632a583b333fa008d9e2bdcf8",
+      "presets/source-distributor.yml": "8cbe329b6786775def27ce43f2095feb1128567c70898e11b9a5e12dacfbaa1e",
+      "presets/visibility-watcher.yml": "05e59d7d7bfd329011cb18245938c4d37633838ce194487da69b5c4438b0b501",
+      "schemas/archive.schema.json": "ad08672042078f5d8a2376f855e0fe936454048fb0e4cc421d5b8082ad4e2200",
+      "schemas/objects.json": "656242d97a63158e9df3453fc7e693e4d5322379514750bdfd5f426cc581cc5b",
+      "schemas/stages.json": "dbb994a399bcfe9ea34fbeacda92a13bfdebb8caeef4f74960faf4461a447c93",
+      "service-front/client.json": "ed223ea9d0721fbafc29eca8e2259119bb3e96b386ccb3aee07ac63f20432038",
+      "skills/ai-answer-rewrite/SKILL.md": "25d1597948d560a13262a91c360abd130f5e6debe2e9faff7d4de2bc9640833d",
+      "skills/citation-reverse/SKILL.md": "ba3350d65c2c0c3fc2b588965ef36abeed39caea53a071c55ce8c3b748fae47b",
+      "skills/dual-entry-inquiry/SKILL.md": "b3aba600d3ce22d3b25bd5e222eac78f91a41cdc55de4699801acdec5754db88",
+      "skills/entity-consistency-check/SKILL.md": "d76fd80eafc29570e6654e568a11001f4f79a7a92df09bf81716a990836d9fa8",
+      "skills/geo-query-craft/SKILL.md": "7b4cf59af2fee1cf5fbd761d2a04c0f394bff478116b4962d77de4b1391d540e",
+      "skills/visibility-monitor/SKILL.md": "b8bbbb54920ae3bcf03a92e580f6a83c01bcf32b11ad294987d88de26c129805",
+      "ui/cases.json": "032a25657ac30c2def9240c45eeee94365adf29848bca91c526b9c7b532a9e7c"
+    }
+  }
+}

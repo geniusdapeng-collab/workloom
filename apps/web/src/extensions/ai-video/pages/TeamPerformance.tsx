@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Skeleton } from "../../../components/hud";
+import { Skeleton } from "@workloom/ui";
 import { ensureDemoLogin, trpc } from "../../../lib/trpc";
 import { Bridge } from "../../../shell/Bridge";
 import { EmployeeCardDrawer, type EmployeeRow } from "../components/team/EmployeeCardDrawer";
 import { HostAgent } from "../components/team/HostAgent";
 
-interface TeamProjection { nightWindow: { range: string }; agents: EmployeeRow[] }
+interface TeamProjection {
+  nightWindow: { range: string };
+  agents: EmployeeRow[];
+}
 
 export default function TeamPerformance() {
   const navigate = useNavigate();
@@ -14,6 +17,7 @@ export default function TeamPerformance() {
   const [ready, setReady] = useState(false);
   const [canDispatch, setCanDispatch] = useState(false);
   const [team, setTeam] = useState<TeamProjection>({ nightWindow: { range: "22:00–08:00" }, agents: [] });
+
   const load = useCallback(async () => {
     await ensureDemoLogin();
     const [roster, member] = await Promise.all([
@@ -26,6 +30,7 @@ export default function TeamPerformance() {
   }, []);
   useEffect(() => { void load(); }, [load]);
   const selected = agentId ? team.agents.find((agent) => agent.id === agentId) ?? null : null;
+
   return (
     <Bridge>
       <div className="mb-4 flex min-w-0 flex-wrap items-center gap-3">

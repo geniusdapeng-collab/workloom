@@ -49,12 +49,12 @@ export function StageRecommendBar({
 
   return (
     <div className="mb-4 rounded-lg border border-gline bg-gold/6 px-4 py-3">
-      <div className="mb-2 flex items-center gap-2">
+      <div className="mb-2 flex min-w-0 flex-wrap items-center gap-2">
         <span className="text-[15px]">🧭</span>
         <b className="text-caption font-bold text-goldhi">适合当前阶段 · {STAGE_LABEL[stage ?? ""] ?? conf.label}</b>
         <span className="text-micro text-ink3">按工作区阶段推荐的 3 件官方装备（发现环）</span>
       </div>
-      <div className="grid grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-3">
         {picks.map((s) => {
           const installed = installedSet.has(s.id);
           return (

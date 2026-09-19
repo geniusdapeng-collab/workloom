@@ -37,16 +37,17 @@ WorkLoom 获客系统是一套**面向 B 端商家的 AI 获客经营系统**：
 **获客的精髓就一句话：在对的地方，用对的内容，接住有意图的人，并且每一环都能度量到钱。**
 
 <!-- CAPABILITIES:BEGIN -->
-<!-- 本区块由 scripts/generate-capabilities.mjs 自动生成（2026-09-02），请勿手改；重跑 pnpm capabilities 更新 -->
+<!-- 本区块由 scripts/generate-capabilities.mjs 自动生成（2026-09-19），请勿手改；重跑 pnpm capabilities 更新 -->
 
 ## 🧩 系统能力速览（自动生成 · 与代码同步）
 
 - 🖥 **三端应用（开箱即看）**：PC 端 · B 端工作台 · 移动端 · B 端高保真 · 移动端 · C 端 AI 服务前台
-- 🧲 **行业 Bundle（垂直能力包）**：bundles/ai-video/ · bundles/geo-growth/ · bundles/hotel/
+- 🏨 **行业 Bundle（垂直能力包）**：bundles/ai-video/ · bundles/geo-growth/ · bundles/hotel/
+- 🧑‍💼 **数字员工与数字人（本仓自带）**：数字员工中心（`/agents`） · 织伴数字人（Live2D 常驻浮层） · 语音与口型引擎
 - 🖐 **操作电脑能力（本仓自带 · 可装生产工作站）**：computer-use 三层感知（65 动作） · HTTP 远程驱动 + MCP server
-- 🤖 **AI 自动化引擎（系统内置能力）**：围栏 DSL 引擎 · L2 编排（ASK/QUEST） · 夜班自动运行 · 模型路由 · 全平台 RPA 发布 · 五元事件 + RLS 隔离 等 14 项
+- 🤖 **AI 自动化引擎（系统内置能力）**：围栏 DSL 引擎 · 技能保鲜环（下行分发） · L2 编排（ASK/QUEST） · 夜班自动运行 · 模型路由 · 全平台 RPA 发布 等 15 项
 - ✅ **验证与质量（工程纪律）**：一键安装（bootstrap） · 主测试套件 · GEO 域套件 · 酒店域套件 · 发布门禁 · 五元事件验链 等 8 项
-- 🎁 **演示与交付资产**：高保真演示页 ×12 · 官网静态站 · 自带技能 ×8 · 能力导览 PPT · Mock 数据体系
+- 🎁 **演示与交付资产**：高保真演示页 ×12 · 官网静态站 · 自带技能 ×9 · 能力导览 PPT · Mock 数据体系
 
 > 📖 完整能力导览（含截图与体验路径）：[docs/capabilities.auto.md](docs/capabilities.auto.md) ｜ 🤖 AI Agent 入口：[AGENTS.md](AGENTS.md) ｜ 🎯 首启必跑：`pnpm preview:all`
 <!-- CAPABILITIES:END -->
@@ -120,35 +121,68 @@ AI 搜索月活破 8.2 亿、AI 问答流量占比首超传统搜索——客户
 - **组织记忆**：每条片子、每次投放的创作与决策过程沉淀为可检索的记忆
 - **全程留痕**：每个镜头、每次审批、每次发布、每条回复都是 append-only 五元事件，SHA-256 哈希链防篡改，崩溃重放零丢失
 
+### 数字员工名册与数字人：获客班组的在岗证明
+
+- **编制可查（`/agents`）**：16 个岗位（投放优化师 / 引用源分析师 / 数字总经理 / 内容与评论运营……）与人类员工同一本通讯录——每个岗位都有平台档案：来源 Bundle、**围栏授权逐条对账**（悬空标红）、绑定技能包、运行约束、**30 天战绩**（动作数 / 采纳率 / 被驳回 / 积分与谷时占比）与等级段位；点「派遣」当场建任务线程；夜班岗位 22:00–08:00 自动上线，只读岗位标绿（无写工具）。
+- **数字人织伴（LoomMate）**：PC 端全页面常驻的 Live2D 秘书——语音 + 口型播报「昨夜内容发布 / 询盘承接 / 今日待拍板」，三态（小角落 / 大形象 / 屏保）可切；你不在电脑前时她聚合非 P0 事项、屏保守着全场，点她就能问数据、派活、看记忆。
+
+---
+
+## 系统架构与业务闭环
+
+<p align="center"><img src="docs/images/architecture.png" alt="WorkLoom 获客系统架构（体验层 / 服务层 / geo-growth Bundle + 基座十域 / 运行时地基 / 数据层）" width="92%"/></p>
+
+五层结构自上而下：**体验层**（B 端工作台 / 移动端 / C 端 AI 服务前台 / 织伴数字人 + IM 通道）→ **服务层**（Hono + tRPC v11，工作区上下文 + RLS）→ **能力层**（geo-growth Bundle：16 个岗位 / 6 个技能 / 4 条管线 + 获客五环与双域触达 ＋ 基座十域零改动继承）→ **运行时地基**（DeepSeek Harness seam 适配）→ **数据层**（PostgreSQL 17 + pgvector：素材与线索全留痕、组织记忆、五元事件哈希链）。
+
+<p align="center"><img src="docs/images/business-loop.png" alt="获客一天的业务闭环：意图洞察 → 双域触达 → 四路承接 → 线索转化 → 归因复盘 → 老板拍板" width="92%"/></p>
+
+**意图洞察 → 双域触达 → 四路承接 → 线索转化 → 归因复盘 → 老板拍板**，六节点闭环；夜间询盘由夜班班组接住、晨间战报报到手机，两条回流（线索归因回写 / 内容门道固化）让每一分投放都更值钱。
+
+> **本机实测（2026-09-19）**：`pnpm suite` **455/459 通过**（服务层 413/414 + HTTP E2E 42/45）；剩余 4 项为 `P-15`（前端悬空调用 `video.cms` / `video.render`）与 `H-13 / H-15 / H-16`（开箱模拟态与真实模式门禁口径），已如实登记为待修。
+
 ---
 
 ## 系统截图（模拟运行态实拍）
 
-以下截图均来自系统**模拟运行态**（Mock 模式：种子演示数据 + 离线确定性模型），页面顶部琥珀色横幅「当前为全模拟运行态」为系统原生标识；PC 端为云栖酒店工作区（ws-yunqi · 主推的酒店获客经营演示）。
+以下截图均来自系统**模拟运行态**（`pnpm preview:all` + 种子演示数据 + 离线确定性模型），页面顶部琥珀色横幅「当前为全模拟运行态」为系统原生标识；PC 端为「WorkLoom GEO · 双域经营演示工作室」（`ws-geo` · geo-growth 行业包）。
 
 ### PC 端 · B 端工作台
 
-| 经营剧场（默认首页） | 工作台 · 总览 |
+| 经营剧场（默认首页 `/`） | 数字员工 · 人机混编通讯录（`/agents`，16 个岗位） |
 |---|---|
-| ![经营剧场](docs/images/shots/pc-home.png) | ![工作台总览](docs/images/shots/pc-workbench.png) |
+| ![经营剧场](docs/images/shots/pc-home.png) | ![数字员工](docs/images/shots/pc-agents.png) |
 
-| 审批中心 | 规则与权限 |
+| 统一待办（`/inbox`） | 审批中心（`/approvals`） |
 |---|---|
-| ![审批中心](docs/images/shots/pc-approval.png) | ![规则与权限](docs/images/shots/pc-rules.png) |
+| ![统一待办](docs/images/shots/pc-inbox.png) | ![审批中心](docs/images/shots/pc-approval.png) |
 
-| 技能中心 | 夜班中心 |
+| 经营报告 · 获客战报（`/reports`） | 服务前台（`/service`） |
+|---|---|
+| ![获客战报](docs/images/shots/pc-reports.png) | ![服务前台](docs/images/shots/pc-service.png) |
+
+| 技能中心（`/skills`） | 夜班中心（`/night`） |
 |---|---|
 | ![技能中心](docs/images/shots/pc-skills.png) | ![夜班中心](docs/images/shots/pc-night.png) |
 
-| 片库 · 渲染脚本 CMS | 落地向导（接入真实数据） |
+| 围栏与权限（`/guardrails`） | 事件账本（`/events`） |
 |---|---|
-| ![渲染脚本 CMS](docs/images/shots/pc-cms.png) | ![落地向导](docs/images/shots/pc-onboarding.png) |
+| ![围栏与权限](docs/images/shots/pc-rules.png) | ![事件账本](docs/images/shots/pc-events.png) |
+
+| 组织记忆（`/memory`） | 经营驾驶舱 · 数字CEO（`/executive`） |
+|---|---|
+| ![组织记忆](docs/images/shots/pc-memory.png) | ![经营驾驶舱](docs/images/shots/pc-chairman.png) |
+
+### 数字人 · 织伴（Live2D 常驻）
+
+| 织伴开场（S0–S4 全身像登场） | 织伴面板（聊聊 / 设置 / 记忆） |
+|---|---|
+| ![织伴开场](docs/images/shots/pc-mate-welcome.png) | ![织伴面板](docs/images/shots/pc-mate-chat.png) |
 
 ### 移动端
 
-| B 端 · 店长驾驶舱 | C 端 · 住客小程序 | C 端 · AI 服务对话 | C 端 · 服务大厅 |
+| B 端 · 经营驾驶舱 | B 端 · 数字员工名册 | C 端 · AI 服务对话 | C 端 · 服务大厅 |
 |---|---|---|---|
-| ![店长驾驶舱](docs/images/shots/mb-owner.png) | ![住客小程序](docs/images/shots/mb-guest.png) | ![AI服务对话](docs/images/shots/mc-chat.png) | ![服务大厅](docs/images/shots/mc-service.png) |
+| ![经营驾驶舱](docs/images/shots/mb-owner.png) | ![B端数字员工](docs/images/shots/mb-agents.png) | ![AI服务对话](docs/images/shots/mc-chat.png) | ![服务大厅](docs/images/shots/mc-service.png) |
 
 ---
 

@@ -104,7 +104,7 @@ AI 搜索月活破 8.2 亿、AI 问答流量占比首超传统搜索——客户
 | `bundles/geo-growth`（GEO 双域） | 1.0.0 | 16（14 员 + 2 指挥官） | 6 | 17 条 | 双域包自身编制：情报 2 / 内容 4 / 分发 3 / 数据 3 / 经营 2 + 公司 CEO、集团 CEO（需单独装配） |
 | `bundles/ai-video`（视频生产线） | 1.0.0 | 33（制作 21 + 经营 12） | 8 | 21 条 | 视频包自身编制：情报五站、导演、剧本、分镜、定妆、渲染、后期 + 商单、投放、分发、复盘、合规、版权等（需单独装配） |
 
-> **组合编制 68 岗尚未并入本仓 main**：`workloom-growth`（获客用增系统）已实现"三包组合编制 + 获客用增班组"——hotel 16 + ai-video 30 + geo-growth 22（双域 16 + 获客用增 7）= **68 个在编岗位**（72 个岗位文件、4 处同名遮蔽按主包裁决、三包基线围栏并集 60 条），并有回归测试（`rosterSize = 68`）与运行日志实证。本仓库 main 目前没有该组合特性（`bundle.json` 无 `composition`/`dependencies` 声明，种子仍按单包装载 16 岗）；**在该特性回移植前，请勿把 68 岗写进本仓对外介绍**。回移植需要同步四处：`bundles/geo-growth/bundle.json`（`dependencies` + `composition.presetOwners`）、`packages/base/bundles/assembly.ts`（组合装配与围栏并集）、`scripts/seed.ts`（组合上岗 + 装配台账）、`packages/base/bundles/bundles.test.ts`（68 岗断言）。
+> **组合编制 70 岗尚未并入本仓 main**：`workloom-growth`（获客用增系统）已实现"三包组合编制 + 获客用增班组"——hotel 16 + ai-video 30 + geo-growth 24（双域 16 + 获客用增 9，含 2 个 P2 条件岗）= **70 个在编岗位**（74 个岗位文件、4 处同名遮蔽按主包裁决、三包基线围栏并集 62 条），并有回归测试（`rosterSize = 70`）与运行日志实证。本仓库 main 目前没有该组合特性（`bundle.json` 无 `composition`/`dependencies` 声明，种子仍按单包装载 16 岗）；**在该特性回移植前，请勿把 70 岗写进本仓对外介绍**。回移植需要同步四处：`bundles/geo-growth/bundle.json`（`dependencies` + `composition.presetOwners`）、`packages/base/bundles/assembly.ts`（组合装配与围栏并集）、`scripts/seed.ts`（组合上岗 + 装配台账）、`packages/base/bundles/bundles.test.ts`（70 岗断言）。
 
 它做决策、带团队、向你汇报：
 

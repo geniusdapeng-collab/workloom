@@ -28,11 +28,11 @@
     },
     {
       "path": "apps/web/package.json",
-      "sha256": "39888e4653096d36f2558755cf7e9b9d3a2a58be1dc87c22c75495a6c11b8ff4"
+      "sha256": "b685ffffff693b5cc8fbfb0c2ff352911c365a1af8f30c165f2d89f609bd5aef"
     },
     {
       "path": "package.json",
-      "sha256": "f57e6387d62191d9d02ed12e801e202b94d3ea5ae272cee4e37206da73555548"
+      "sha256": "a891727c8bcf78bd8c60443e8ba6657ca91a0fdc635ce5a0dc85fd160ce4043a"
     },
     {
       "path": "packages/audit-engine/package.json",
@@ -64,7 +64,7 @@
     },
     {
       "path": "pnpm-lock.yaml",
-      "sha256": "ba2d91722c517b1ff073ca357fef733383e636be7d3e5ee91c00236fdddda206"
+      "sha256": "d2453b7dadf357673fe7353a057458d7b86134cb0a6eee5836ac6c1b3306aaaa"
     },
     {
       "path": "product.manifest.json",
@@ -88,5 +88,5 @@
     }
   ],
   "manifestSha256": "e0340ff5a9ac4cb175dfe90c7af0507a3ff10bd9e77e0bd5e7ebc72443180502",
-  "packageLockSha256": "7244e80930caa8cc240645b838c97152c0fbe7bf9bda9fcd2d305c6283ecacc7"
+  "packageLockSha256": "a4c6eba5b7faedbb9f3dd652a98d7226528430ac61a8af1497a70aa222f953fa"
 }

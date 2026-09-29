@@ -9,9 +9,9 @@
  */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import type pg from "pg";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, extname, join, resolve, sep } from "node:path";
 import { getAppPool, getGatewayPool, getOwnerPool } from "@workloom/db";
 import {
   getCapabilities,
@@ -21,14 +21,9 @@ import {
   type Identity,
 } from "@workloom/base/tenancy";
 import { gatewayAppend, gatewayAppendOnClient, insertWithReadableId, MockEmbedder, THREAD_ID_SOURCE, upsertMemoryInTx } from "@workloom/base/workdata";
-import { INTENT_ROUTE_TIMEOUT_DISPATCH_MS, makeReadableId } from "@workloom/shared";
-import { registerAskKbSearch } from "@workloom/runtime";
-
-import { loadGoalArchive, registerIndustryQuestPlanner, resolveDispatchPresetKey } from "../runtime/thread-runner.js";
-import { capabilityActionProcedure, actionProcedure, capabilityWriteProcedure, protectedProcedure, publicProcedure, router, scopeOf, sessionProcedure, writeProcedure } from "./context.js";
+import { makeReadableId } from "@workloom/shared";
+import { capabilityWriteProcedure, protectedProcedure, publicProcedure, router, scopeOf, sessionProcedure, writeProcedure } from "./context.js";
 import { accountsRouter } from "./accounts-router.js";
-import { searchKB } from "../service/kb.js";
-import { acquisitionQuestPlanner } from "../industry/hotel/acquisition-planner.js";
 import {
   ApprovalError,
   batchApprove,
@@ -40,10 +35,20 @@ import { routeIntent, runAsk, runQuest } from "@workloom/runtime";
 import { LlmIntentClassifier, type IntentClassifier } from "@workloom/runtime";
 import { providerFromEnv, OpenAiCompatibleProvider } from "@workloom/base/model-router";
 import { routedLlmCall, resetLlmAssembly } from "../service/llm.js";
+import { loadDeploymentToolExecutor } from "../runtime/tool-executor.js";
+import {
+  loadGoalArchive,
+  resolveDispatchPresetKey,
+  resolveThreadPresetKey,
+  runQuestForThread,
+} from "../runtime/thread-runner.js";
+import { startVideoProjectRun, StudioWorkerError } from "../video/studio-worker.js";
+import { resolveScenePolicyForIntent, ScenePolicyRouteError } from "../video/scene-policy-routing.js";
+import { applyRouteToMetadata, buildPipelineIntent, routeVideoPipeline } from "@hyperreality/video-studio";
 import { creditsRouter, modelFeedbackRouter } from "./credits-router.js";
 import { runRouterReviewBeat } from "@workloom/base/model-router";
 import {
-  loadCharter, parseCharter, transition, defaultCharter,
+  autonomySchema, loadCharter, parseCharter, transition, defaultCharter,
   runBriefingBeat, runQueueBeat, runDeviationBeat, runBreakerBeat, buildScorecard,
   runOutcomeReviewBeat, runHrReviewBeat, runBoardPackBeat, runOrgScanBeat, applyReplacement,
   buildFloor,
@@ -60,13 +65,15 @@ import {
 } from "@workloom/base/night-shift";
 import {
   activateRuleVersion,
+  checkCandidateAgainstBaseline,
   confirmDryRun,
   createDryRun,
   fenceActivationFromProposal,
   fenceRuleRowId,
   loadFencePack,
+  loadActiveRulesInTx,
 } from "@workloom/base/fence-engine";
-import { MAX_CONCURRENT_THREADS, PLAN_TIERS } from "@workloom/shared";
+import { INTENT_ROUTE_TIMEOUT_DISPATCH_MS, MAX_CONCURRENT_THREADS, PLAN_TIERS } from "@workloom/shared";
 import {
   dispatchFromAnomaly,
   DispatchError,
@@ -127,47 +134,51 @@ import {
 import {
   BundleError,
   activateBundle,
+  bundlesRoot,
   computeAssembly,
   createBundleDraft,
   listProfileSlugs,
   recheckBundle,
   listSegments,
+  provisionComposedWorkforce,
   resolveSegment,
 } from "@workloom/base/bundles";
 import YAML from "yaml";
 import { videoRouter } from "../video/router.js";
 import { serviceRouter } from "../service/router.js";
+import { acquisitionQuestPlanner } from "../industry/hotel/acquisition-planner.js";
+import { overlayRouter } from "./overlay-router.js";
+import { acquisitionRouter } from "./acquisition-router.js";
+import { collaborationRouter } from "./collaboration-router.js";
 import {
   AccessAuthorityError,
   resolveAuthoritativeClientAccess,
 } from "../service/access-authority.js";
 import {
-  assignWizardDraft,
   completeWizardDraft,
   getWizardDraft,
+  normalizeWizardDraftPayload,
   replayWelcome,
   saveWizardDraft,
   saveWelcomeProgress,
   welcomeProgress,
   WELCOME_STEPS,
 } from "../service/onboarding-continuity.js";
-import {
-  bundledServiceFrontAvailable,
-  resolveServiceFrontPublication,
-} from "../service/service-front-publication.js";
+import { bundledServiceFrontAvailable, resolveServiceFrontPublication } from "../service/service-front-publication.js";
+import { svcQuery } from "../service/events.js";
+import { resolveWorkspaceInspectionAdapter } from "../service/inspection-adapter.js";
 import {
   buildEvolutionScorecard,
   decayMemories,
   disableMemory,
-  editMemoryContent,
-  getFeedbackEnums,
   previewMemoryImpact,
   reactivateMemory,
-  recallMemoriesByMember,
   restoreMemories,
+  editMemoryContent,
+  getFeedbackEnums,
+  recallMemoriesByMember,
   runMemoryMinerBeat,
 } from "@workloom/base/evolve";
-import { overlayRouter } from "./overlay-router.js";
 import { getMemorySources, searchMemories } from "@workloom/base/workdata";
 
 /** system router：健康检查（公开） */
@@ -222,6 +233,28 @@ function locateBundleDir(): string {
   return join(process.cwd(), "bundles/hotel");
 }
 
+/**
+ * 组合主包（获客主包）标识：读 product.manifest.json 的 defaultBundle。
+ * 段装配完成后按它做组合编制上岗（主包 + 依赖包一次装齐），
+ * 拿不到清单时退回 hotel（酒店垂直是本产品的默认行业）。
+ */
+function locateProductPrimaryBundle(): string {
+  let dir = process.cwd();
+  for (let i = 0; i < 6; i++) {
+    const manifest = join(dir, "product.manifest.json");
+    if (existsSync(manifest)) {
+      try {
+        const raw = JSON.parse(readFileSync(manifest, "utf-8")) as { defaultBundle?: unknown };
+        if (typeof raw.defaultBundle === "string" && raw.defaultBundle.trim()) return raw.defaultBundle.trim();
+      } catch { /* 清单损坏不阻断装配：退回酒店垂直 */ }
+    }
+    const up = dirname(dir);
+    if (up === dir) break;
+    dir = up;
+  }
+  return "hotel";
+}
+
 /** 四 env 写回 .env（保留其他行）+ 同步 process.env + 清 LLM 缓存（全链即时生效，无需重启）
  * 注意（D26 审计#5）：LLM 装配为进程级全局——部署口径是「一进程一工作区」（local-first 单店），
  * 多工作区共享进程时全租户共用同一装配；按工作区留痕仅为审计归属，不构成隔离。 */
@@ -241,7 +274,7 @@ function persistLlmEnv(cfg: { provider: string; baseUrl: string; apiKey: string;
   writeFileSync(file, lines.filter((l, i) => l !== "" || i < lines.length - 1).join("\n"));
   cachedLlmCall = undefined; // 复位装配缓存（见 llmCall()/intentClassifier()）
   cachedClassifier = undefined;
-  cachedIndustry = undefined;
+  industryCache.clear(); // A-04：行业缓存按工作区分桶后整体复位
   resetLlmAssembly(); // v3.0：模型池与行业策略缓存同步复位（写盘即全链生效免重启）
 }
 
@@ -297,53 +330,6 @@ const onboardingRouter = router({
     role: ctx.identity.role,
   })),
 
-  /** 标准落地向导草稿（HP-31 类型漂移修复：补齐基座 procedure，apps/web onboarding 页调用） */
-  wizardDraft: protectedProcedure.query(({ ctx }) => getWizardDraft(ctx.identity.workspaceId)),
-
-  saveWizardDraft: writeProcedure
-    .input(z.object({
-      expectedVersion: z.number().int().min(0),
-      currentStep: z.number().int().min(0).max(4),
-      payload: z.object({
-        provider: z.string().max(40).optional(),
-        baseUrl: z.string().max(200).optional(),
-        model: z.string().max(80).optional(),
-        businessName: z.string().max(60).optional(),
-        industry: z.string().max(40).optional(),
-        note: z.string().max(300).optional(),
-        siteUrl: z.string().max(500).optional(),
-        documentTitle: z.string().max(120).optional(),
-        testQuestion: z.string().max(500).optional(),
-      }).strict(),
-    }))
-    .mutation(({ ctx, input }) => saveWizardDraft(ctx.identity.workspaceId, {
-      memberId: ctx.identity.memberId,
-      memberNo: ctx.identity.memberNo,
-      role: ctx.identity.role,
-    }, input)),
-
-  assignWizardDraft: writeProcedure
-    .input(z.object({ memberId: z.string().min(1), expectedVersion: z.number().int().min(1) }))
-    .mutation(({ ctx, input }) => assignWizardDraft(ctx.identity.workspaceId, {
-      memberId: ctx.identity.memberId,
-      memberNo: ctx.identity.memberNo,
-      role: ctx.identity.role,
-    }, input)),
-
-  completeWizardDraft: writeProcedure
-    .input(z.object({ expectedVersion: z.number().int().min(1) }))
-    .mutation(({ ctx, input }) => completeWizardDraft(ctx.identity.workspaceId, {
-      memberId: ctx.identity.memberId,
-      memberNo: ctx.identity.memberNo,
-      role: ctx.identity.role,
-    }, input.expectedVersion)),
-
-  /** C 端发布结果必须来自部署环境、工作区路由和渠道接入事实（补齐基座 procedure）。 */
-  serviceFrontPublication: protectedProcedure.query(({ ctx }) => resolveServiceFrontPublication({
-    workspaceId: ctx.identity.workspaceId,
-    bundledClientAvailable: bundledServiceFrontAvailable(),
-  })),
-
   /** 运行态总览（P0 横幅/落地向导同一事实源）：数据模式 + LLM 装配 + 工作区规模 */
   status: protectedProcedure.query(async ({ ctx }) => {
     const scope = scopeOf(ctx.identity);
@@ -382,6 +368,45 @@ const onboardingRouter = router({
       client.release();
     }
   }),
+
+  /**
+   * 落地向导续写（P0 断链修复）：服务层 onboarding-continuity 已实现版本化草稿，
+   * 但端点从未挂载，而 apps/web 引导页在 Promise.all 里首个请求就调用它 —— 之前该页必然失败。
+   * 责任人交接与权限判定留在服务层（canEditWizard/assignWizardDraft），端点只做入参校验。
+   */
+  wizardDraft: protectedProcedure.query(async ({ ctx }) => getWizardDraft(ctx.identity.workspaceId)),
+
+  saveWizardDraft: writeProcedure
+    .input(z.object({
+      expectedVersion: z.number().int().min(0),
+      currentStep: z.number().int().min(0).max(4),
+      // 载荷由服务层 normalizeWizardDraftPayload 归一化与校验（白名单字段），
+      // 这里保持 unknown 以免前端强类型载荷被 Record 索引签名挡住。
+      payload: z.unknown(),
+    }))
+    .mutation(async ({ ctx, input }) => saveWizardDraft(
+      ctx.identity.workspaceId,
+      { memberId: ctx.identity.memberId, memberNo: ctx.identity.memberNo, role: ctx.identity.role },
+      {
+        expectedVersion: input.expectedVersion,
+        currentStep: input.currentStep,
+        payload: normalizeWizardDraftPayload(input.payload),
+      },
+    )),
+
+  completeWizardDraft: writeProcedure
+    .input(z.object({ expectedVersion: z.number().int().min(0) }))
+    .mutation(async ({ ctx, input }) => completeWizardDraft(
+      ctx.identity.workspaceId,
+      { memberId: ctx.identity.memberId, memberNo: ctx.identity.memberNo, role: ctx.identity.role },
+      input.expectedVersion,
+    )),
+
+  /** C 端发布事实（真实 URL/路由/渠道能力分别核验）：引导页与 P22 共用同一事实源。 */
+  serviceFrontPublication: protectedProcedure.query(async ({ ctx }) => resolveServiceFrontPublication({
+    workspaceId: ctx.identity.workspaceId,
+    bundledClientAvailable: bundledServiceFrontAvailable(),
+  })),
 
   /** 第①步：真实大模型「测试连接」（真实 round-trip；不落盘、不留痕 key） */
   testLlm: writeProcedure
@@ -470,8 +495,12 @@ const onboardingRouter = router({
         await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
         await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
         await client.query(`UPDATE workspaces SET name=$2, industry=$3 WHERE id=$1`, [scope.workspaceId, input.displayName, input.industry]);
+        // 合并而非整体替换 archive.business：一店一档里的价带/保底价/佣金/退改政策是
+        // **行业档案**（bundles/<industry>/schemas/archive.schema.json 声明），
+        // 落地向导只补充 name/note/onboarded_at。整体覆盖会把 price_bands、floor_price
+        // 一并抹掉——行业规划器随后取不到价格锚点，调价只能失败关闭（实测踩过）。
         await client.query(
-          `UPDATE profiles SET archive = jsonb_set(archive, '{business}', $2::jsonb), industry=$3, updated_at=now() WHERE workspace_id=$1`,
+          `UPDATE profiles SET archive = jsonb_set(archive, '{business}', COALESCE(archive->'business', '{}'::jsonb) || $2::jsonb), industry=$3, updated_at=now() WHERE workspace_id=$1`,
           [scope.workspaceId, JSON.stringify({ name: input.displayName, note: input.note, onboarded_at: new Date().toISOString() }), input.industry],
         );
         // D16（#1/A）：档案写与事件留痕同一事务同一 COMMIT
@@ -699,6 +728,27 @@ const onboardingRouter = router({
         );
         if (prof.rowCount === 0) throw new Error(`工作区档案缺失（profiles 无 ${scope.workspaceId} 行），请先完成经营主体步骤`);
 
+        /**
+         * ⑤·组合编制上岗（融合获客系统）：段装配只装了租户起步方式那一套（酒店经营），
+         * 但本产品的获客闭环还需要内容生产（ai-video）与 GEO 分发（geo-growth）的岗位同时在场。
+         * 按 product.manifest.json 的主包做一次幂等组合上岗：编制并集 + 围栏并集（只紧不松）。
+         */
+        const primaryBundle = locateProductPrimaryBundle();
+        let composition: Awaited<ReturnType<typeof provisionComposedWorkforce>> | null = null;
+        try {
+          // 复用本事务的连接（manageTransaction=false）：组合上岗与段装配同 COMMIT，
+          // 且单调守卫能看到本事务里刚写入的客群补丁（不会把客户收紧的围栏滚回去）
+          composition = await provisionComposedWorkforce(
+            // 显式包一层 executor：pg.PoolClient.query 的重载含 callback 变体，
+            // 直接传结构类型不成立；这里只暴露最小查询面，事务仍由本作用域掌控
+            { query: (sql: string, params?: unknown[]) => client.query(sql, params as never[]) },
+            scope, primaryBundle, ctx.identity.memberNo, undefined, { manageTransaction: false },
+          );
+        } catch (composeErr) {
+          // 组合上岗失败不静默：整体由外层事务 ROLLBACK（不装半个班子），原因交调用方
+          throw new Error(`组合编制上岗失败（${primaryBundle}）：${composeErr instanceof Error ? composeErr.message : composeErr}`);
+        }
+
         // ⑥ 事件留痕（D16：与装配写同事务同 COMMIT）
         await gatewayAppendOnClient(client, {
           ...scope, actor: { id: ctx.identity.memberNo, type: "human" }, sessionId: `onboarding-${scope.workspaceId}`,
@@ -713,6 +763,15 @@ const onboardingRouter = router({
               presets: presets.length, skills_installed: skillsInstalled, skills_skipped: skillsSkipped,
               fencePatch: patch?.version ?? null, fence_rules_applied: fenceRulesApplied,
               fence_default_level: patch?.default_level ?? null,
+              composition: composition
+                ? {
+                    bundles: composition.bundleIds,
+                    roster_size: composition.rosterSize,
+                    per_bundle: composition.perBundle,
+                    fence_rules: composition.fenceRules,
+                    shadowed: composition.shadowed,
+                  }
+                : null,
             },
             after: { stage },
             basis: [`落地向导「起步方式」：${asm.label}——${asm.pitch}`],
@@ -900,62 +959,97 @@ const membersRouter = router({
   }),
 });
 
-/** threads router：list（L7.1 越权返回空）/ dispatch（Quest 接口；H-10 越版 403+留痕） */
-interface RunnableAgent {
-  id: string;
-  presetKey: string;
-}
-
 /**
- * 运行员工只能从当前工作区已装配且 ready 的班组中解析。调用方可传稳定 preset_key
- * 或已落在线程上的 agent id；缺省优先 Bundle 声明的 coordinator，再按稳定顺序选择。
- * 基座不内置任何行业员工名。
+ * 产物（artifact）取件 —— 任务详情「最终结果」直接看/下载产物（2026-09-21 产品所有者口径）。
+ *
+ * 安全边界（三条，fail-closed）：
+ *  ① 只认工作区事件里真实登记过的产物路径（按 threadId + index 定位，客户端拿不到任意路径）；
+ *  ② 路径必须落在允许的资产根内（工作区资产目录 / 本机视觉工位租户目录 / 仓库 outputs），
+ *     且解析真实路径后仍在根内（防符号链接跳出）；
+ *  ③ 只放行白名单扩展名 + 单件上限（默认 24MB，可用 WORKLOOM_ARTIFACT_MAX_BYTES 调整），
+ *     超限明确报错，不静默截断。
+ * 文本边界：文件名/路径不出服务端；客户端只拿 kind/mime/bytes 与 base64 数据。
  */
-async function runnableAgentOn(
-  client: pg.PoolClient,
-  workspaceId: string,
-  requested?: string | null,
-): Promise<RunnableAgent> {
-  const result = await client.query<{ id: string; preset_key: string }>(
-    `SELECT id, preset_key FROM agents
-     WHERE workspace_id=$1 AND status='ready'
-       AND ($2::text IS NULL OR preset_key=$2 OR id=$2)
-     ORDER BY CASE WHEN kind='coordinator' THEN 0 ELSE 1 END,
-              CASE WHEN readonly=false THEN 0 ELSE 1 END,
-              preset_key
-     LIMIT 1`,
-    [workspaceId, requested ?? null],
-  );
-  const row = result.rows[0];
-  if (!row) {
-    throw new TRPCError({
-      code: requested ? "BAD_REQUEST" : "PRECONDITION_FAILED",
-      message: requested ? "所选数字员工当前不可运行，请重新选择" : "当前行业包没有可运行的数字员工，请先完成装配检查",
-    });
-  }
-  return { id: row.id, presetKey: row.preset_key };
+const ARTIFACT_MIME: Record<string, string> = {
+  ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
+  ".gif": "image/gif", ".bmp": "image/bmp",
+  ".mp4": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm",
+  ".md": "text/markdown; charset=utf-8", ".txt": "text/plain; charset=utf-8",
+  ".html": "text/html; charset=utf-8", ".htm": "text/html; charset=utf-8",
+  ".pdf": "application/pdf", ".json": "application/json; charset=utf-8",
+};
+const ARTIFACT_MAX_BYTES = Number(process.env.WORKLOOM_ARTIFACT_MAX_BYTES ?? 24 * 1024 * 1024);
+
+function artifactKindOf(mime: string): "image" | "video" | "document" | "file" {
+  if (mime.startsWith("image/")) return "image";
+  if (mime.startsWith("video/")) return "video";
+  if (mime.startsWith("text/") || mime === "application/pdf" || mime.startsWith("application/json")) return "document";
+  return "file";
 }
 
-async function resolveRunnableAgent(
-  scope: { tenantId: string; workspaceId: string },
-  requested?: string | null,
-): Promise<RunnableAgent> {
-  const client = await getAppPool().connect();
+/** 允许读取的资产根（真实路径） */
+function artifactRoots(workspaceId: string): string[] {
+  const explicit = (process.env.WORKLOOM_ARTIFACT_ROOTS ?? "").split(",").map((v) => v.trim()).filter(Boolean);
+  const bridgeSupport = process.env.WORKLOOM_VISUAL_BRIDGE_SUPPORT_DIR
+    ?? join(homedir(), "Library", "Application Support", "WorkLoomVisualBridge");
+  return [
+    ...explicit,
+    join(bridgeSupport, "var", "tenants", workspaceId),
+    resolve(process.cwd(), "outputs"),
+    resolve(process.cwd(), "var"),
+  ].flatMap((root) => {
+    try {
+      return [realpathSync(root)];
+    } catch {
+      return [];
+    }
+  });
+}
+
+/** 从线程事件里按登记顺序取出产物条目（只认 outputs[]，路径仅服务端可见） */
+interface RegisteredArtifact { path: string; bytes: number | null }
+function artifactsOfEvents(events: Array<{ decision?: { after?: unknown } }>): RegisteredArtifact[] {
+  const out: RegisteredArtifact[] = [];
+  for (const ev of events) {
+    const after = ev?.decision?.after as Record<string, unknown> | undefined;
+    if (!after) continue;
+    const containers: unknown[] = [after, (after as { result?: unknown }).result];
+    for (const container of containers) {
+      if (!container || typeof container !== "object") continue;
+      const outputs = (container as { outputs?: unknown }).outputs;
+      if (!Array.isArray(outputs)) continue;
+      for (const item of outputs) {
+        if (!item || typeof item !== "object") continue;
+        const record = item as Record<string, unknown>;
+        const path = typeof record.path === "string" ? record.path : typeof record.file === "string" ? record.file : null;
+        if (!path) continue;
+        out.push({ path, bytes: typeof record.bytes === "number" ? record.bytes : null });
+      }
+    }
+  }
+  return out;
+}
+
+/** 校验路径：必须在允许根内、扩展名白名单、大小不超限；返回可读的真实路径与元数据 */
+function resolveArtifactFile(path: string, workspaceId: string): { real: string; mime: string; size: number } {
+  const mime = ARTIFACT_MIME[extname(path).toLowerCase()];
+  if (!mime) throw new TRPCError({ code: "BAD_REQUEST", message: "该产物格式暂不支持在线预览或下载（仅支持图片/视频/文本文档/PDF）" });
+  let real: string;
   try {
-    await client.query("BEGIN");
-    await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
-    await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
-    const agent = await runnableAgentOn(client, scope.workspaceId, requested);
-    await client.query("COMMIT");
-    return agent;
-  } catch (error) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    throw error;
-  } finally {
-    client.release();
+    real = realpathSync(path);
+  } catch {
+    throw new TRPCError({ code: "NOT_FOUND", message: "产物文件不在本机（可能已被清理或位于工位另一侧）" });
   }
+  const allowed = artifactRoots(workspaceId).some((root) => real === root || real.startsWith(root + sep));
+  if (!allowed) throw new TRPCError({ code: "FORBIDDEN", message: "产物不在本工作区的资产范围内，已拒绝读取" });
+  const size = statSync(real).size;
+  if (size > ARTIFACT_MAX_BYTES) {
+    throw new TRPCError({ code: "PAYLOAD_TOO_LARGE", message: `产物约 ${Math.round(size / 1024 / 1024)} MB，超过在线取件上限（${Math.round(ARTIFACT_MAX_BYTES / 1024 / 1024)} MB），请到资产目录直接取用` });
+  }
+  return { real, mime, size };
 }
 
+/** threads router：list（L7.1 越权返回空）/ dispatch（Quest 接口；H-10 越版 403+留痕） */
 const threadsRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
     const scope = scopeOf(ctx.identity);
@@ -971,12 +1065,12 @@ const threadsRouter = router({
          FROM threads WHERE workspace_id=$1 ORDER BY created_at DESC LIMIT 50`,
         [scope.workspaceId],
       );
+      await client.query("COMMIT"); // A-08：显式提交，失败即抛（不再 finally 吞错）
       return r.rows;
     } catch (err) {
       await client.query("ROLLBACK").catch(() => undefined);
       throw err;
     } finally {
-      await client.query("COMMIT").catch(() => undefined);
       client.release();
     }
   }),
@@ -985,8 +1079,9 @@ const threadsRouter = router({
   dispatch: capabilityWriteProcedure("quest")
     .input(
       z.object({
-        title: z.string().min(1).max(500), // F3.1：≤500 字
-        // GR-14：长目标走档案引用——标题继续当 ≤500 字索引，规划器读全文（此前长 brief 被硬截断）
+        title: z.string().min(1).max(500), // F3.1：≤500 字索引
+        // GR-14：长文目标走档案引用（一店一档 profiles.archive.goals.<ref>），规划读全文，
+        // 标题继续当 ≤500 字索引——此前长 brief 只能被硬截断，规划器看到的是残缺目标。
         goalRef: z.string().min(1).max(120).nullish(),
         // 不写死 preset：由工作区活动 Bundle 的 orchestrator 解析（见 resolveDispatchPresetKey）；
         // nullish：既有验收脚本/客户端会显式传 null 表示"用默认"，不能因此 400。
@@ -1003,6 +1098,84 @@ const threadsRouter = router({
         // 含糊指令：反问澄清，不盲目建任务
         return { kind: "clarify" as const, question: intent.clarifyQuestion, via: intent.via };
       }
+      /**
+       * 视频目标「管线分流」（T-2026-0925-0002）。
+       *
+       * 此前这里对所有视频目标硬编码 `isMarketing: true` 且不传 metadata：
+       *   ① 叙事片/知识片也被当成营销片立项，而营销片要多跑情报五站 + G1 门，成本更高；
+       *   ② 营销片其实**没有真的跑情报**——vendor 靠 `metadata.dataMining / brief.product`
+       *      数据驱动，两个条件都不成立就整层跳过，等于「营销片 = 叙事片 + 一个营销标签」。
+       *
+       * 现在改成：先分流（规则优先，摇摆时才走模型仲裁），拿不准就把选择交回用户
+       * （`clarify`，不建线程、不建项目、不花渲染/情报成本）；营销片必须带商品锚点，
+       * 缺商品名同样先问清楚。
+       */
+      const videoGoal = /视频|短片|影片|成片|镜头卡|分镜|宣传片|TVC|纪录片|口播|种草片|混剪/.test(input.title);
+      const isVideoQuest = input.runImmediately && intent.mode === "quest" && videoGoal;
+      const videoRoute = isVideoQuest
+        ? await routeVideoPipeline({ text: input.title }, { llmCall: llmCall("pipeline-route", scope) })
+        : null;
+      if (videoRoute && videoRoute.route === "clarify") {
+        // 澄清留痕（无线程可挂，用视频路由对象作载体；依据与信号一并落账，便于复盘"为什么没开工"）
+        await gatewayAppend(getGatewayPool(), {
+          tenantId: scope.tenantId, workspaceId: scope.workspaceId,
+          actor: { id: ctx.identity.memberNo, type: "human" },
+        }, {
+          who: { type: "human", id: ctx.identity.memberNo },
+          context: {
+            tenant_id: scope.tenantId, workspace_id: scope.workspaceId,
+            time: new Date().toISOString(), channel: "inapp",
+          },
+          object: { type: "video_pipeline_route", id: `route-${Date.now().toString(36)}` },
+          decision: {
+            action: "video.route.clarify",
+            after: {
+              intent: input.title.slice(0, 500),
+              missing: videoRoute.clarify?.missing ?? ["route"],
+              signals: videoRoute.signals,
+              rationale: videoRoute.rationale,
+            },
+            basis: ["分流不确定 → 先问用户，避免按错误管线花情报/渲染成本（宁可多问一句，不做错一条片）"],
+          },
+          rule_impact: [],
+        });
+        return {
+          kind: "clarify" as const,
+          question: videoRoute.clarify?.question ?? "这条片子走营销片还是叙事片？",
+          via: videoRoute.via,
+          /**
+           * GR-20：clarify 必须带回**原目标**——否则用户回答"走营销片"会被当成全新目标，
+           * 不含"视频"字样就走通用 quest，与原需求脱节（实测 T8：clarify → 回答 → generic quest）。
+           */
+          routeContext: {
+            goal: input.title,
+            missing: videoRoute.clarify?.missing ?? ["route"],
+            options: [
+              { id: "marketing", label: "走营销片（带商品情报与 G1 确认门）" },
+              { id: "narrative", label: "走叙事片（通用管线，不跑情报层）" },
+            ],
+          },
+          videoRoute: {
+            route: "clarify" as const,
+            missing: videoRoute.clarify?.missing ?? ["route"],
+            signals: videoRoute.signals,
+          },
+        };
+      }
+      if (isVideoQuest) {
+        // 在线程建档前处理片型歧义；失败时不留下无项目的 queued 线程。
+        try {
+          resolveScenePolicyForIntent(input.title);
+        } catch (error) {
+          if (error instanceof ScenePolicyRouteError) {
+            throw new TRPCError({
+              code: error.kind === "catalog" ? "PRECONDITION_FAILED" : "BAD_REQUEST",
+              message: error.message,
+            });
+          }
+          throw error;
+        }
+      }
       // N-14：岗位解析带任务语义（视觉/视频/发布/增长四域偏好），不再只认 Bundle 清单顺序
       const presetKey = input.presetKey ?? (await resolveDispatchPresetKey(scope, input.title));
       /**
@@ -1017,13 +1190,11 @@ const threadsRouter = router({
       const app = getAppPool();
       const client = await app.connect();
       let threadId: string;
-      let selectedAgent: RunnableAgent;
       try {
         // 事务级 RLS 上下文必须在显式事务内设置：autocommit 下 set_config(...,true) 语句结束即失效
         await client.query("BEGIN");
         await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
         await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
-        selectedAgent = await runnableAgentOn(client, scope.workspaceId, presetKey);
         /**
          * L3.1：单工作区并发 ≤10，超出排队且可见（须在 RLS 上下文内统计，否则恒 0 行 fail-open）。
          * N-15（第三轮实测）：只统计**有近期心跳**的 running——种子/崩溃遗留的"僵尸 running"
@@ -1044,6 +1215,8 @@ const threadsRouter = router({
             message: `并发上限 ${MAX_CONCURRENT_THREADS}/工作区（L3.1/G11），已超出请稍后或排队`,
           });
         }
+        // 号源走 SECURITY DEFINER 函数（0016：全库最大值绕 RLS——主键全库唯一，按本区分配必撞他区；
+        // 历史教训：第二次派遣即 duplicate key，ASK/QUEST 主链路故障）
         /**
          * X-07（第四轮实测，P2）：建档即写 agent_id——此前只有 runQuest 执行时才回填，
          * 排队中的线程在楼层上无归属（`agent_id IS NULL` 被过滤），客户看不到"谁在排这条队"。
@@ -1052,15 +1225,12 @@ const threadsRouter = router({
           `SELECT id FROM agents WHERE workspace_id=$1 AND preset_key=$2 LIMIT 1`,
           [scope.workspaceId, presetKey],
         );
-        const ownerAgentId = ownerAgent.rows[0]?.id ?? selectedAgent.id;
+        const ownerAgentId = ownerAgent.rows[0]?.id ?? null;
         /**
-         * 号源走 SECURITY DEFINER 函数（0016：全库最大值绕 RLS——主键全库唯一，按本区分配必撞他区；
-         * 历史教训：第二次派遣即 duplicate key，ASK/QUEST 主链路故障）。
-         *
-         * GR-02（2026-09-29 第二次修复，基座 T-2026-0929-0003）：取号 + 建档统一走
-         * `insertWithReadableId`——纯 nextval 原子取号、返回值直接可用（不再 +1）、
-         * 撞号用 SAVEPOINT 换号重试。旧实现把重试写在**已被中止的事务**里
-         * （PG：`current transaction is aborted`），从诞生起就不可能成功。
+         * GR-02（2026-09-29 第二次修复）：取号 + 建档统一走 `insertWithReadableId`——
+         * 纯 nextval 原子取号、返回值直接可用（不再 +1）、撞号用 SAVEPOINT 换号重试。
+         * 旧实现把重试写在**已被中止的事务**里（PG：`current transaction is aborted`），
+         * 从诞生起就不可能成功——这正是第三方 12 路并发实测那 1 个 500 的直接成因。
          */
         const allocated = await insertWithReadableId(client, THREAD_ID_SOURCE, async (id) => {
           await client.query(
@@ -1090,11 +1260,13 @@ const threadsRouter = router({
           },
           rule_impact: [],
         });
+        // A-08 修复：COMMIT 纳入 try 主体——此前在 finally 里 .catch(()=>undefined) 吞掉，
+        // COMMIT 失败（连接断开/序列化冲突）时事务实际回滚但调用方按成功继续（幽灵账本）
+        await client.query("COMMIT");
       } catch (err) {
         await client.query("ROLLBACK").catch(() => undefined);
         throw err;
       } finally {
-        await client.query("COMMIT").catch(() => undefined);
         client.release();
       }
       // 派遣事件已随建线程同事务落库（D16；G8 三段瀑布同口径）
@@ -1102,16 +1274,132 @@ const threadsRouter = router({
       // ask 问询：即时应答（B8——取数为真、模型可插拔；不依赖 runImmediately 按钮）
       if (intent.mode === "ask") {
         // N-11：ask 事件归属本工作区实际岗位（此前硬编码 hotel 的 "morning-briefing"，账本张冠李戴）
-        const ra = await runAsk(getAppPool(), getGatewayPool(), scope, {
-          threadId, goal: planningGoal, presetKey, llmCall: llmCall("ask-synthesize", scope),
-        });
-        return { kind: "routed" as const, mode: intent.mode, via: intent.via, threadId, status: ra.status, answer: ra.answer };
+        try {
+          const ra = await runAsk(getAppPool(), getGatewayPool(), scope, {
+            threadId, goal: planningGoal, presetKey, llmCall: llmCall("ask-synthesize", scope),
+          });
+          return { kind: "routed" as const, mode: intent.mode, via: intent.via, threadId, status: ra.status, answer: ra.answer };
+        } catch (err) {
+          // A-02 修复兜底：runAsk 已把线程认领为 running，失败必须给终态出口，不得悬挂
+          await getAppPool().query(
+            `UPDATE threads SET status='failed', error=$3, updated_at=now() WHERE id=$1 AND workspace_id=$2 AND status='running'`,
+            [threadId, scope.workspaceId, err instanceof Error ? err.message.slice(0, 500) : String(err).slice(0, 500)],
+          ).catch(() => undefined);
+          throw err;
+        }
       }
-      if (input.runImmediately && intent.mode === "quest") {
-        const r = await runQuest(app, getGatewayPool(), scope, {
-          threadId, goal: planningGoal, presetKey, llmCall: llmCall("quest-plan", scope),
+      /**
+       * 视频创作类目标 → 走**标准视频生产管线**（ai-video studio：情报五站 → G1..G7 → 25/30 字段
+       * 镜头卡 → 导演评审 → 定妆锚定 → 渲染脚本 → 渲染 → 发布监控；内部门全自动，只留投放/改价/
+       * 超预算/对外发布人审），而不是通用 Quest 规划器——后者只有工位视觉工具，会把内部流转步骤
+       * 照单执行并留下「未提供工具」的空跑记录（真机实测：T-175 视频任务）。
+       * 线程照常建档（任务中心可见），并落一条关联事件把线程与视频项目串起来。
+       */
+      if (isVideoQuest) {
+        const decision = videoRoute!;
+        try {
+          /**
+           * 分流结论落到 metadata（营销片写 dataMining/brief，叙事片显式清空），
+           * 这样 vendor 的情报层才会按"数据驱动"的口径被真正激活或跳过。
+           */
+          const seededMetadata = applyRouteToMetadata(undefined, decision);
+          /**
+           * 创作意图清理 + 需求口径（真机 VID-AUDIT-M1）：
+           * ① 「走营销片」这类分流行指令不能进创意解析（否则主题被解析成「走营销片」，质量 0/5）；
+           * ② 营销片默认竖屏 30s（与本仓 brief 默认一致），显式写进口径块，
+           *    否则生成器按类型推导出 45s，G2 监制以「时长自相矛盾 + 缺画幅」打回。
+           */
+          const pipelineIntent = buildPipelineIntent(input.title, {
+            durationSec: 30,
+            aspectRatio: decision.route === "marketing" ? "9:16" : undefined,
+          });
+          const started = await startVideoProjectRun(scope, {
+            rawIntent: input.title,
+            customerMetadata: null,
+            intent: pipelineIntent,
+            metadata: seededMetadata,
+            isMarketing: decision.route === "marketing",
+            by: { id: ctx.identity.memberNo, type: "human" },
+            threadId,
+          });
+          await gatewayAppend(getGatewayPool(), {
+            tenantId: scope.tenantId, workspaceId: scope.workspaceId,
+            actor: { id: ctx.identity.memberNo, type: "human" },
+            sessionId: threadId,
+          }, {
+            who: { type: "human", id: ctx.identity.memberNo },
+            context: {
+              tenant_id: scope.tenantId, workspace_id: scope.workspaceId,
+              time: new Date().toISOString(), channel: "inapp",
+            },
+            object: { type: "video_project", id: started.projectId },
+            decision: {
+              action: "video.route.standard",
+              after: {
+                threadId, projectId: started.projectId, runId: started.runId,
+                pipeline: decision.route,
+                via: decision.via,
+                confidence: decision.confidence,
+                product: decision.product?.name ?? null,
+                productSource: decision.product?.source ?? null,
+                signals: decision.signals,
+              },
+              basis: [
+                decision.route === "marketing"
+                  ? "分流判定：营销片（含商品情报档案 Stage -2：情报五站 + G1 确认门）"
+                  : "分流判定：叙事片（通用管线，不跑情报层）",
+                `分流依据：${decision.rationale}`,
+              ],
+            },
+            rule_impact: [],
+          });
+          return {
+            kind: "routed" as const, mode: "quest" as const, via: intent.via, threadId,
+            status: "running" as const,
+            video: {
+              projectId: started.projectId,
+              runId: started.runId,
+              pipeline: decision.route,
+              product: decision.product?.name ?? null,
+            },
+          };
+        } catch (error) {
+          if (error instanceof ScenePolicyRouteError) {
+            throw new TRPCError({
+              code: error.kind === "catalog" ? "PRECONDITION_FAILED" : "BAD_REQUEST",
+              message: error.message,
+            });
+          }
+          if (error instanceof StudioWorkerError && error.code === "LLM_MISSING") {
+            throw new TRPCError({ code: "PRECONDITION_FAILED", message: error.message });
+          }
+          throw error;
+        }
+      }
+      /**
+       * GR-11：agent 模式同样支持"立即执行"——跑到第一个 review 点挂起并返回 pending_review。
+       * 此前 agent + runImmediately 会静默落到 queued（用户以为派了活，其实永远不动）。
+       */
+      if (input.runImmediately && (intent.mode === "quest" || intent.mode === "agent")) {
+        /**
+         * GR-15/GR-16：执行装配统一走 thread-runner（真实执行器注入 + 视觉目标确定性规划 +
+         * 连接器覆盖度提示），调度器与"审批后自动续跑"复用同一条路径。
+         */
+        const r = await runQuestForThread(scope, {
+          threadId, goal: planningGoal, presetRef: presetKey,
+          ...(intent.mode === "agent" ? { mode: "agent" as const } : {}),
         });
-        return { kind: "routed" as const, mode: intent.mode, via: intent.via, threadId, status: r.status, stepsDone: r.stepsDone, stepsTotal: r.stepsTotal };
+        // 返回挂起步骤的审批号：前端（统一对话框/任务页）据此给"去审批"直达入口
+        return {
+          kind: "routed" as const, mode: intent.mode, via: intent.via, threadId,
+          status: r.status, stepsDone: r.stepsDone, stepsTotal: r.stepsTotal,
+          ...(r.pendingApprovalId ? { pendingApprovalId: r.pendingApprovalId } : {}),
+          ...(r.unverified?.length ? { unverified: r.unverified } : {}),
+          ...(r.warnings?.length ? { warnings: r.warnings } : {}),
+          ...(r.blockedBy ? { blockedBy: r.blockedBy } : {}),
+          ...(r.error ? { error: r.error } : {}),
+          presetKey: r.presetKey,
+        };
       }
       return { kind: "routed" as const, mode: intent.mode, via: intent.via, threadId, status: "queued" as const };
     }),
@@ -1219,8 +1507,76 @@ const threadsRouter = router({
       }
     }),
 
+  /**
+   * 产物清单（任务详情「最终结果」用）：只回元数据（序号/类型/mime/大小），不回路径与文件名。
+   * 路径仅服务端可见 —— 客户端按 index 取件，拿不到任意文件读取能力。
+   */
+  artifacts: protectedProcedure
+    .input(z.object({ threadId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const scope = scopeOf(ctx.identity);
+      const app = getAppPool();
+      const client = await app.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+        const r = await client.query<{ payload: { decision?: { after?: unknown } } }>(
+          `SELECT payload FROM biz_events WHERE workspace_id=$1 AND session_id=$2 ORDER BY seq ASC`,
+          [scope.workspaceId, input.threadId],
+        );
+        const registered = artifactsOfEvents(r.rows.map((row) => row.payload));
+        return registered.flatMap((entry, index) => {
+          const mime = ARTIFACT_MIME[extname(entry.path).toLowerCase()];
+          if (!mime) return [];
+          return [{
+            index,
+            kind: artifactKindOf(mime),
+            mime,
+            bytes: entry.bytes,
+          }];
+        });
+      } catch (err) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw err;
+      } finally {
+        await client.query("COMMIT").catch(() => undefined);
+        client.release();
+      }
+    }),
+
+  /** 产物取件（base64，走既有鉴权头；不做无鉴权的裸 HTTP 端点）：图片/视频/文档都能直接预览与下载 */
+  artifactData: protectedProcedure
+    .input(z.object({ threadId: z.string().min(1), index: z.number().int().min(0) }))
+    .query(async ({ ctx, input }) => {
+      const scope = scopeOf(ctx.identity);
+      const app = getAppPool();
+      const client = await app.connect();
+      let entry: RegisteredArtifact | undefined;
+      try {
+        await client.query("BEGIN");
+        await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+        const r = await client.query<{ payload: { decision?: { after?: unknown } } }>(
+          `SELECT payload FROM biz_events WHERE workspace_id=$1 AND session_id=$2 ORDER BY seq ASC`,
+          [scope.workspaceId, input.threadId],
+        );
+        const registered = artifactsOfEvents(r.rows.map((row) => row.payload))
+          .filter((item) => Boolean(ARTIFACT_MIME[extname(item.path).toLowerCase()]));
+        entry = registered[input.index];
+      } catch (err) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw err;
+      } finally {
+        await client.query("COMMIT").catch(() => undefined);
+        client.release();
+      }
+      if (!entry) throw new TRPCError({ code: "NOT_FOUND", message: "该任务没有这个序号的产物" });
+      const { real, mime, size } = resolveArtifactFile(entry.path, scope.workspaceId);
+      const data = readFileSync(real).toString("base64");
+      return { index: input.index, kind: artifactKindOf(mime), mime, bytes: size, base64: data };
+    }),
+
   /** 运行/续跑线程（replay 断点续跑幂等，E3.3/H-5；按线程模式分流：ask 应答 / agent 逐步确认 / quest 自主执行） */
-  run: capabilityActionProcedure("quest", "task.dispatch")
+  run: capabilityWriteProcedure("quest")
     .input(z.object({
       threadId: z.string(),
       /**
@@ -1229,43 +1585,210 @@ const threadsRouter = router({
        */
       goal: z.string().optional(),
       presetKey: z.string().min(1).nullish(),
-      /**
-       * 注：growth 侧还有 `replan` / `replanReason`（GR-01 显式重规划）——它依赖
-       * `packages/runtime/src/loop.ts` 的计划持久化面；基座的 loop.ts 专项被在途 PR #156
-       * 占用（§4 并发冲突门禁先到先得），本 PR 不含该文件，故此处不引入用不上的入参。
-       */
+      /** GR-01：显式重规划（默认 false=复用持久化计划） */
+      replan: z.boolean().default(false),
+      replanReason: z.string().max(120).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const scope = scopeOf(ctx.identity);
       const app = getAppPool();
       const client = await app.connect();
       let mode: "ask" | "agent" | "quest" = "quest";
-      let selectedAgent: RunnableAgent;
-      let runGoal = "";
+      let threadAgentRef: string | null = null;
+      let threadTitle: string | null = null;
       try {
         await client.query("BEGIN");
         await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
-        const t = await client.query<{ mode: string; agent_id: string | null; title: string }>(`SELECT mode, agent_id, title FROM threads WHERE id=$1 AND workspace_id=$2`, [input.threadId, scope.workspaceId]);
-        if (!t.rows[0]) throw new TRPCError({ code: "NOT_FOUND", message: "任务不存在或无权访问" });
-        selectedAgent = await runnableAgentOn(client, scope.workspaceId, input.presetKey ?? t.rows[0].agent_id);
+        const t = await client.query<{ mode: string; agent_id: string | null; title: string }>(
+          `SELECT mode, agent_id, title FROM threads WHERE id=$1 AND workspace_id=$2`,
+          [input.threadId, scope.workspaceId],
+        );
         await client.query("COMMIT");
         if (t.rows[0]?.mode === "ask" || t.rows[0]?.mode === "agent") mode = t.rows[0].mode;
-        // N-06：缺省读线程 title——对话框"推进"不再把"继续/推进吧"当规划目标
-        runGoal = input.goal ?? t.rows[0]?.title ?? "";
+        threadAgentRef = t.rows[0]?.agent_id ?? null;
+        threadTitle = t.rows[0]?.title ?? null;
       } catch (err) {
         await client.query("ROLLBACK").catch(() => undefined);
         throw err;
       } finally {
         client.release();
       }
+      // N-06：goal 缺省用线程标题（用户新输入只在显式 replan 时作为新目标）
+      const goal = input.replan ? (input.goal?.trim() || threadTitle || "") : (threadTitle || input.goal?.trim() || "");
+      // 前端可能把 threads.agent_id（agents.id）当 presetKey 传进来；统一归一成 preset_key
+      const presetKey = await resolveThreadPresetKey(scope, input.presetKey ?? threadAgentRef, goal);
       if (mode === "ask") {
-        return runAsk(app, getGatewayPool(), scope, { threadId: input.threadId, goal: runGoal, presetKey: selectedAgent!.presetKey, llmCall: llmCall("ask-synthesize", scope) });
+        return runAsk(app, getGatewayPool(), scope, { threadId: input.threadId, goal, presetKey, llmCall: llmCall("ask-synthesize", scope) });
       }
-      return runQuest(app, getGatewayPool(), scope, {
-        threadId: input.threadId, goal: runGoal, presetKey: selectedAgent!.presetKey, mode, llmCall: llmCall("quest-plan", scope),
+      // GR-15/GR-16：与派遣/自动续跑/调度器同一条执行装配路径
+      return runQuestForThread(scope, {
+        threadId: input.threadId, goal, mode, presetRef: presetKey,
+        ...(input.replan ? { replan: true, ...(input.replanReason ? { replanReason: input.replanReason } : {}) } : {}),
       });
     }),
+
+  /**
+   * 线程留言（三合一全局框的「留言」落点，2026-09-20）：
+   * 只写五元事件留痕（object=thread），**不派活、不回答、不推进**——与夜班频道 nightShift.note
+   * 同口径（后者 object=store / channel=夜班）。走统一网关：权限 → 脱敏 → 高风险校验 → 事件。
+   * 归属校验在 RLS 上下文内做，越权线程一律 NOT_FOUND（同 get 口径，不泄露存在性）。
+   */
+  note: writeProcedure
+    .input(z.object({ threadId: z.string().min(1), text: z.string().min(1).max(500) }))
+    .mutation(async ({ ctx, input }) => {
+      const scope = scopeOf(ctx.identity);
+      const app = getAppPool();
+      const client = await app.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+        await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
+        const t = await client.query(`SELECT id FROM threads WHERE id=$1 AND workspace_id=$2`, [input.threadId, scope.workspaceId]);
+        await client.query("COMMIT");
+        if (t.rowCount === 0) {
+          throw new TRPCError({ code: "NOT_FOUND", message: `任务 ${input.threadId} 不存在或不属于当前工作区` });
+        }
+      } catch (err) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw err;
+      } finally {
+        client.release();
+      }
+      const r = await gatewayAppend(getGatewayPool(), {
+        ...scope, actor: { id: ctx.identity.memberNo, type: "human" }, sessionId: input.threadId,
+      }, {
+        who: { type: "human", id: ctx.identity.memberNo },
+        context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString(), channel: "任务会话" },
+        object: { type: "thread", id: input.threadId },
+        decision: { action: "thread.note", after: { text: input.text } },
+        rule_impact: [],
+      });
+      return { threadId: input.threadId, eventId: r.eventId };
+    }),
 });
+
+/**
+ * B-05/B-06 修复：批准后副作用统一钩子（单笔 decide / 批量 batchApprove / IM 手势回调三路同钩）。
+ *  - 围栏激活：保持同步 await（既有验收口径：decide 返回即生效），失败隔离不反噬审批结果；
+ *  - Quest 续跑：scheduleQuestResumeAfterApproval（内部自管 setTimeout/catch）；
+ *  - HR 汰换上岗：hr.replacement 批准 → 旧停用 + 新员工上岗（此前仅单笔 decide 路径有，批量批准永不执行）。
+ * 各项失败只落服务端日志——审批已 approved 的事实不被副作用失败反噬（B-06 对症）。
+ */
+async function runPostApprovalSideEffects(
+  scope: { tenantId: string; workspaceId: string },
+  approvalId: string,
+): Promise<void> {
+  try {
+    await activateFenceRuleAfterApproval(scope, approvalId);
+  } catch (err) {
+    console.error(`[approvals] 围栏激活副作用失败 ${approvalId}（审批结果不变）：`, err instanceof Error ? err.message : err);
+  }
+  scheduleQuestResumeAfterApproval(scope, approvalId);
+  try {
+    const app = getAppPool();
+    const c = await app.connect();
+    try {
+      await c.query("BEGIN");
+      await c.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+      const snap = await c.query<{ snapshot: Record<string, unknown> }>(
+        `SELECT snapshot FROM approvals WHERE approval_id=$1`, [approvalId],
+      );
+      await c.query("COMMIT");
+      const ss = snap.rows[0]?.snapshot ?? {};
+      if (ss.kind === "hr.replacement" && ss.design && typeof ss.agent_id === "string") {
+        await applyReplacement(app, scope, ss.design as never, ss.agent_id);
+      }
+    } catch (e) {
+      await c.query("ROLLBACK").catch(() => undefined);
+      throw e;
+    } finally {
+      c.release();
+    }
+  } catch (err) {
+    console.error(`[approvals] HR 汰换副作用失败 ${approvalId}（审批结果不变）：`, err instanceof Error ? err.message : err);
+  }
+}
+
+/**
+ * 步骤级审批通过 → Quest 自动续跑（2026-09-20 三合一真机修复）。
+ *
+ * 原语义：审批只改审批状态，用户还得回任务页点"继续推进"；生图/发布这类**半程任务**
+ * 于是停在 waiting 态（实测："生成一张手冲咖啡图"批完不出图）。这里在审批落库后
+ * 异步续跑一次（fire-and-forget）：
+ *  - 只处理审批事件带 `decision.step_id` 与 `session_id`（线程）的步骤级审批；
+ *  - 线程非 quest 模式或已完成 → 跳过；续跑仍走围栏/回执原语义（不伪造完成）；
+ *  - 失败只落服务端日志，审批结果不变（用户仍可手动"继续推进"）。
+ */
+function scheduleQuestResumeAfterApproval(
+  scope: { tenantId: string; workspaceId: string },
+  approvalId: string,
+): void {
+  setTimeout(() => {
+    void (async () => {
+      try {
+        const app = getAppPool();
+        const client = await app.connect();
+        let threadId: string | null = null;
+        let stepId: string | null = null;
+        try {
+          await client.query("BEGIN");
+          await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+          await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
+          const r = await client.query<{ session_id: string | null; step_id: string | null }>(
+            `SELECT e.session_id, e.payload->'decision'->>'step_id' AS step_id
+               FROM approvals a JOIN biz_events e ON e.event_id = a.event_id
+              WHERE a.approval_id = $1 AND a.workspace_id = $2`,
+            [approvalId, scope.workspaceId],
+          );
+          threadId = r.rows[0]?.session_id ?? null;
+          stepId = r.rows[0]?.step_id ?? null;
+          await client.query("COMMIT");
+        } catch (err) {
+          await client.query("ROLLBACK").catch(() => undefined);
+          throw err;
+        } finally {
+          client.release();
+        }
+        if (!threadId || !stepId) return;
+
+        const c2 = await app.connect();
+        let thread: { mode: string; title: string; status: string; agent_id: string | null } | undefined;
+        try {
+          await c2.query("BEGIN");
+          await c2.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+          const t = await c2.query<{ mode: string; title: string; status: string; agent_id: string | null }>(
+            `SELECT mode, title, status, agent_id FROM threads WHERE id=$1 AND workspace_id=$2`,
+            [threadId, scope.workspaceId],
+          );
+          thread = t.rows[0];
+          await c2.query("COMMIT");
+        } catch (err) {
+          await c2.query("ROLLBACK").catch(() => undefined);
+          throw err;
+        } finally {
+          c2.release();
+        }
+        /**
+         * N-05：自动续跑同时覆盖 quest 与 agent——agent 模式"每一步都要人工确认"，
+         * 若批准后不自动推进，对话框里的 agent 任务永远走不完（用户还得去任务页手动点"继续推进"）。
+         */
+        if (!thread || (thread.mode !== "quest" && thread.mode !== "agent") || thread.status === "completed") return;
+        // threads.agent_id 是 agents.id，不是 preset_key：runQuestForThread 内部归一，否则续跑必然「preset 未注册」
+        const r = await runQuestForThread(scope, {
+          threadId, goal: thread.title,
+          ...(thread.mode === "agent" ? { mode: "agent" as const } : {}),
+          presetRef: thread.agent_id,
+        });
+        console.log(`[approval] 审批 ${approvalId} 通过 → 自动续跑 ${threadId}：${r.status}（${r.stepsDone}/${r.stepsTotal}）`);
+      } catch (error) {
+        console.warn(
+          "[approval] 自动续跑失败（审批结果不变，可手动继续推进）",
+          error instanceof Error ? error.message : String(error),
+        );
+      }
+    })();
+  }, 0);
+}
 
 /**
  * E1 联调接线（PF.5/F2.4）：审批手势通过后的副作用分发——
@@ -1321,7 +1844,8 @@ async function activateFenceRuleAfterApproval(
 /** approvals router（B6：统一队列/三手势/批量/超时扫描；L5.1 服务端强制鉴权） */
 const approvalsRouter = router({
   list: protectedProcedure
-    .input(z.object({ status: z.enum(["pending", "approved", "edited", "rejected", "expired"]).optional() }).optional())
+    // B-07 修复：superseded 入列——被重规划作废的审批此前在任何过滤下不可见（状态机盲区）
+    .input(z.object({ status: z.enum(["pending", "approved", "edited", "rejected", "expired", "superseded"]).optional() }).optional())
     .query(async ({ ctx, input }) => {
       return listQueue(getAppPool(), scopeOf(ctx.identity), { status: input?.status });
     }),
@@ -1347,32 +1871,9 @@ const approvalsRouter = router({
           { memberNo: ctx.identity.memberNo, role: ctx.identity.role },
           input.approvalId,
           { type: input.gesture, reasonEnum: input.reasonEnum, reasonText: input.reasonText, editedAfter: input.editedAfter, editKind: input.editKind },
+          undefined,
+          { onApproved: (id) => runPostApprovalSideEffects(scopeOf(ctx.identity), id) },
         );
-        // E1 联调接线（PF.5/F2.4）：fence.rule.propose 手势通过 → 激活规则版本
-        if (!res.deduped && res.status === "approved") {
-          await activateFenceRuleAfterApproval(scopeOf(ctx.identity), input.approvalId);
-          // D22 汰换重生：hr.replacement 批准 → 旧停用 + 新员工上岗
-          const scope2 = scopeOf(ctx.identity);
-          const app2 = getAppPool();
-          const c2 = await app2.connect();
-          try {
-            await c2.query("BEGIN");
-            await c2.query("SELECT set_config('app.workspace_id', $1, true)", [scope2.workspaceId]);
-            const snap = await c2.query<{ snapshot: Record<string, unknown> }>(
-              `SELECT snapshot FROM approvals WHERE approval_id=$1`, [input.approvalId],
-            );
-            await c2.query("COMMIT");
-            const ss = snap.rows[0]?.snapshot ?? {};
-            if (ss.kind === "hr.replacement" && ss.design && typeof ss.agent_id === "string") {
-              await applyReplacement(app2, scope2, ss.design as never, ss.agent_id);
-            }
-          } catch (e) {
-            await c2.query("ROLLBACK").catch(() => undefined);
-            throw e;
-          } finally {
-            c2.release();
-          }
-        }
         return res;
       } catch (err) {
         if (err instanceof ApprovalError) {
@@ -1395,11 +1896,9 @@ const approvalsRouter = router({
           scopeOf(ctx.identity),
           { memberNo: ctx.identity.memberNo, role: ctx.identity.role },
           input.approvalIds,
+          // B-05 修复：批量批准与单笔 decide 同钩子——Quest 续跑/围栏激活/HR 汰换不再断链
+          { onApproved: (id) => runPostApprovalSideEffects(scopeOf(ctx.identity), id) },
         );
-        // E1 联调接线（PF.5/F2.4）：批量采纳通过项同样触发围栏激活接线（防御性；围栏提案标记 high_risk 本不可批量）
-        for (const id of res.approved) {
-          await activateFenceRuleAfterApproval(scopeOf(ctx.identity), id);
-        }
         return res;
       } catch (err) {
         if (err instanceof ApprovalError) {
@@ -1423,7 +1922,11 @@ const inspectionRouter = router({
   }),
   /** 手动跑一轮巡检（生产由触发器引擎 cron 07:00 唤起，F9.1；演示手动触发） */
   run: writeProcedure.mutation(async ({ ctx }) => {
-    return runInspectionScan(getAppPool(), getGatewayPool(), scopeOf(ctx.identity));
+    const scope = scopeOf(ctx.identity);
+    // HP-02 同批次能力：巡检适配器必须来自**已验证的活动 Bundle**——
+    // 未安装/投影损坏/未登记行业全部失败关闭（不静默回落到基座通用检查）。
+    const binding = await resolveWorkspaceInspectionAdapter(scope.workspaceId);
+    return runInspectionScan(getAppPool(), getGatewayPool(), scope, { adapter: binding.adapter });
   }),
   /** 一键派单（F9.3：以异常事件为输入唤起业务 Agent；幂等 L9.3） */
   dispatch: writeProcedure
@@ -2038,6 +2541,31 @@ const nightShiftRouter = router({
 
 /** fence router（F8 起 P5 数据源：规则版本化投影 + 30 天触发聚合 + dry-run 生命周期 F2.4/F2.5） */
 const fenceRouter = router({
+  /**
+   * 生效围栏规则（客户端/执行器瀑布的数据源）：给 dsh 围栏插件与外部执行器用的**最小投影**
+   * （rule_id / level / match）。origin：`acdc037` 在隔离副本补过该端点——P 域实测发现 harness 指向的
+   * `fence.activeRules` 不存在（404 → 插件把错误体当数组遍历 → **整个工具层不可用**）；
+   * `packages/runtime/plugins/workloom-fence.plugin.js` 与 `packages/runtime/plugins/README.md` 都按此路径对接。
+   * 本仓（主仓）此前从未实现该端点（T-2026-0925-0007 补齐），返回体只含判定所需字段，不含规则说明与来源细节。
+   */
+  activeRules: protectedProcedure.query(async ({ ctx }) => {
+    const scope = scopeOf(ctx.identity);
+    const rows = await svcQuery<{ rule_id: string; level: string; match_spec: Record<string, unknown> | null }>(scope.workspaceId,
+      `SELECT rule_id, level, match_spec FROM fence_rules
+        WHERE (workspace_id=$1 OR workspace_id='*') AND status='active'
+        ORDER BY rule_id`,
+      [scope.workspaceId]);
+    return rows.map((r) => ({
+      rule_id: r.rule_id,
+      level: r.level,
+      match: {
+        actions: (r.match_spec?.actions as string[] | undefined) ?? [],
+        object_types: (r.match_spec?.object_types as string[] | undefined) ?? [],
+        when: String(r.match_spec?.when ?? "true"),
+      },
+    }));
+  }),
+
   /** 规则列表（P5E2：级别 pill + 来源 + 30 天触发数；基线 🔒 集团强制 F2.3） */
   rules: protectedProcedure.query(async ({ ctx }) => {
     const scope = scopeOf(ctx.identity);
@@ -2140,6 +2668,21 @@ const fenceRouter = router({
         await client.query("BEGIN");
         await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
         await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
+        // HP-02：提案入口即做基线单调守卫——同 rule_id 的基线规则只可加严
+        // （level 不降 / when 不变 / 覆盖集不收窄）。修复前该守卫只在测试里被调用：
+        // 工作区可以把一条 block 基线规则"升级"成 review 或恒假条件，静默架空基线。
+        const activeBaseline = await loadActiveRulesInTx(client, scope);
+        const guard = checkCandidateAgainstBaseline(activeBaseline, {
+          rule_id: input.rule.ruleId, version: "v-next", name: input.rule.name,
+          level: input.rule.level, is_baseline: false,
+          objectTypes: input.rule.objectTypes, actions: input.rule.actions, when: input.rule.when,
+        });
+        if (!guard.ok) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `围栏基线只可加严，本次变更被拒：${guard.violations.map((v) => v.reason).join("；")}`,
+          });
+        }
         const rowId = fenceRuleRowId(input.rule.ruleId, scope.workspaceId);
         await client.query(
           `INSERT INTO fence_rules (id, rule_id, version, workspace_id, name, level, match_spec, action, is_baseline, status, created_by)
@@ -2202,7 +2745,7 @@ function inNightWindow(now = new Date()): boolean {
 }
 
 const rosterRouter = router({
-  /** 名册总览（p8 默认态：人类 3 + Agent 7 混编 + 30 天工时聚合 + 在线状态） */
+  /** 名册总览（p8 默认态：人类成员 + 工作区在编 Agent 全员混编 + 30 天工时聚合 + 在线状态） */
   list: protectedProcedure.query(async ({ ctx }) => {
     const scope = scopeOf(ctx.identity);
     const app = getAppPool();
@@ -2238,12 +2781,16 @@ const rosterRouter = router({
       );
 
       // Agent 成员 + 30 天工时聚合（L6.3：动作数/采纳/驳回/积分/峰谷占比全部事件投影）
+      // + 织球 LoomBall 真实状态信号（T-2026-0926-0019：最近动作 / 待审批 / 近 1h 被围栏阻断）——
+      //   三个信号都是只读投影，不新增表、不改变任何写路径；用 LATERAL 各取一次，避免 N+1。
       const agents = await client.query<{
         id: string; preset_key: string; name: string; version: string; kind: string;
         readonly: boolean; status: string; invalid_reason: string | null;
         fence_bindings: string[]; skills: string[];
         meta: { night_shift?: boolean; high_risk?: boolean; description?: string };
         actions30: string; adopted30: string; rejected30: string; credits30: string; offpeak30: string;
+        last_action: string | null; last_action_at: Date | null;
+        pending_approvals: string; blocked_recent: string;
       }>(
         `SELECT a.id, a.preset_key, a.name, a.version, a.kind, a.readonly, a.status, a.invalid_reason,
                 a.fence_bindings, a.skills, a.meta,
@@ -2266,8 +2813,29 @@ const rosterRouter = router({
                 (SELECT COALESCE(sum((e.payload->'model_trace'->>'credits')::numeric)
                         FILTER (WHERE e.payload->'model_trace'->>'window' = 'off-peak'), 0) FROM biz_events e
                   WHERE e.workspace_id=$1 AND e.payload->'who'->>'id' = a.preset_key
-                    AND e.created_at > now() - interval '30 days') AS offpeak30
-         FROM agents a WHERE a.workspace_id=$1 ORDER BY a.preset_key`,
+                    AND e.created_at > now() - interval '30 days') AS offpeak30,
+                last_ev.action AS last_action, last_ev.at AS last_action_at,
+                COALESCE(pend.n, 0)::text AS pending_approvals,
+                COALESCE(blocked.n, 0)::text AS blocked_recent
+         FROM agents a
+         LEFT JOIN LATERAL (
+           SELECT e.payload->'decision'->>'action' AS action, e.created_at AS at
+           FROM biz_events e
+           WHERE e.workspace_id = a.workspace_id AND e.payload->'who'->>'id' = a.preset_key
+           ORDER BY e.seq DESC LIMIT 1
+         ) last_ev ON true
+         LEFT JOIN LATERAL (
+           SELECT count(*) AS n FROM approvals ap JOIN biz_events e ON e.event_id = ap.event_id
+           WHERE ap.workspace_id = $1 AND e.workspace_id = $1
+             AND e.payload->'who'->>'id' = a.preset_key AND ap.status = 'pending'
+         ) pend ON true
+         LEFT JOIN LATERAL (
+           SELECT count(*) AS n FROM biz_events e
+           WHERE e.workspace_id = $1 AND e.payload->'who'->>'id' = a.preset_key
+             AND e.created_at > now() - interval '1 hour'
+             AND e.payload->'rule_impact' @> '[{"result":"blocked"}]'::jsonb
+         ) blocked ON true
+         WHERE a.workspace_id=$1 ORDER BY a.preset_key`,
         [scope.workspaceId],
       );
 
@@ -2299,6 +2867,12 @@ const rosterRouter = router({
             description: a.meta?.description ?? "",
             // M4：夜班 preset 窗口内自动上线；其余待命；invalid=校验失败（F2.10 错误态）
             online: a.status === "ready" && a.meta?.night_shift === true && nightNow,
+            // 织球 LoomBall：岗位此刻的真实工作信号（唯一事实源，映射层在
+            // apps/web/src/components/loomball/agent-emotion.ts；此处不做任何语义加工）
+            lastAction: a.last_action,
+            lastActionAt: a.last_action_at ? a.last_action_at.toISOString() : null,
+            pendingApprovals: Number(a.pending_approvals),
+            blockedRecent: Number(a.blocked_recent),
             stats: {
               actions30: actions, adopted30: adopted, rejected30: rejected,
               adoptionRate: decided > 0 ? adopted / decided : null,
@@ -2348,26 +2922,31 @@ const rosterRouter = router({
         const agent = ar.rows[0];
         if (!agent) return null; // L7.1：越权/不存在一律返回空
 
-        const ws = await client.query<{ name: string; bundle_id: string | null; is_example: boolean }>(
-        `SELECT name, bundle_id, is_example FROM workspaces WHERE id=$1`, [scope.workspaceId]);
+        const ws = await client.query<{ name: string; bundle_id: string | null; industry: string; is_example: boolean }>(
+        `SELECT name, bundle_id, industry, is_example FROM workspaces WHERE id=$1`, [scope.workspaceId]);
 
         // 航道许可：fence_bindings 逐条对账 fence_rules 当前 active 版本（缺规则=声明悬空，标红 F2.10）
         const fences = agent.fence_bindings.length === 0 ? [] : (await client.query<{
           rule_id: string; name: string; level: string; version: string; is_baseline: boolean;
         }>(
+          // HP-02：同一 rule_id 可能同时存在全局基线与工作区版本，运行时按 deny 优先并集求值（judge 取最严），
+          // 展示口径必须取「实际生效的最严级别」，不能按 created_at 取最新行——否则界面/航道许可
+          // 会把被基线压住的宽松版本显示为生效规则，与真实拦截不一致（证据保真）。
           `SELECT DISTINCT ON (rule_id) rule_id, name, level, version, is_baseline
            FROM fence_rules
            WHERE (workspace_id=$1 OR workspace_id='*') AND status='active' AND rule_id = ANY($2)
-           ORDER BY rule_id, created_at DESC`,
+           ORDER BY rule_id,
+                    CASE level WHEN 'block' THEN 2 WHEN 'review' THEN 1 ELSE 0 END DESC,
+                    is_baseline DESC, created_at DESC`,
           [scope.workspaceId, agent.fence_bindings],
         )).rows;
 
         // 技能包：preset 声明 skills × 技能注册表 × 本工作区安装态（F8.2 安装即绑定）
         const skillRows = agent.skills.length === 0 ? [] : (await client.query<{
-          id: string; name: string; level: string; version: string; fence_bindings: string[]; installed: boolean;
+          id: string; name: string; description: string; level: string; version: string; fence_bindings: string[]; installed: boolean;
         }>(
           // preset 声明为短名（revenue-manager），注册表主键带 skill- 前缀——两种形态都匹配
-          `SELECT s.id, s.name, s.level, s.version, s.fence_bindings,
+          `SELECT s.id, s.name, s.description, s.level, s.version, s.fence_bindings,
                   EXISTS(SELECT 1 FROM skill_installs si WHERE si.skill_id=s.id AND si.workspace_id=$1) AS installed
            FROM skills s
            WHERE s.id = ANY($2) OR s.id = ANY(ARRAY(SELECT 'skill-' || x FROM unnest($2::text[]) AS x))
@@ -2426,7 +3005,15 @@ const rosterRouter = router({
             constraints: agent.meta?.prompt?.constraints ?? [],
           },
           workspaceName: ws.rows[0]?.name ?? "",
-          bundle: "hyperreality-ai-video", // 首版唯一行业 Bundle（D2）
+          /**
+           * 来源行业包：组合编制下每个岗位由不同包提供（hotel / ai-video / geo-growth），
+           * 事实源是装配器写入的 meta.sourceBundleId；旧单包数据回落工作区已装配行业。
+           * 禁止再写死单一 Bundle（曾固定为 hyperreality-ai-video，对当时组合编制的全部岗位都错）。
+           */
+          bundle: (agent.meta as { sourceBundleId?: string } | undefined)?.sourceBundleId
+            ?? ws.rows[0]?.bundle_id
+            ?? ws.rows[0]?.industry
+            ?? "unknown",
           nightWindow: { open: inNightWindow(), range: "22:00–08:00" },
           fences: agent.fence_bindings.map((ruleId) => {
             const hit = fences.find((f) => f.rule_id === ruleId);
@@ -2618,6 +3205,8 @@ const imRouter = router({
           scope,
           input,
           mockDriverFor(input.channel),
+          // B-05 修复：IM 手势批准与端内 decide 同钩子（批准≠执行断链对症）
+          { onApproved: (id) => runPostApprovalSideEffects(scope, id) },
         );
         return { ...r, unsigned: sig.unsigned };
       } catch (err) {
@@ -2770,17 +3359,34 @@ function llmCall(scene = "generic", scope?: { tenantId: string; workspaceId: str
 }
 
 /** 工作区行业（bundle 第⑦槽 model-policy.yml 按行业加载；进程级缓存） */
-let cachedIndustry: string | null | undefined;
-async function workspaceIndustry(scope: { workspaceId: string }): Promise<string | null> {
-  if (cachedIndustry !== undefined) return cachedIndustry;
+/**
+ * A-04 修复（路由空转）：①查询此前无事务级 GUC，workspaces 有 RLS
+ * （USING id = current_setting('app.workspace_id')）→ 恒 0 行 → 行业恒 null，
+ * bundle model-policy.yml 永不生效；②单值缓存跨工作区串味（第二工作区吃第一工作区的行业）。
+ * 现在：事务内双 GUC 查询（与全仓编码铁律同口径），缓存按 workspaceId 分桶。
+ */
+const industryCache = new Map<string, string | null>();
+async function workspaceIndustry(scope: { tenantId: string; workspaceId: string }): Promise<string | null> {
+  const hit = industryCache.get(scope.workspaceId);
+  if (hit !== undefined) return hit;
+  const app = getAppPool();
+  const client = await app.connect();
   try {
-    const r = await getAppPool().query<{ industry: string | null }>(
+    await client.query("BEGIN");
+    await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+    await client.query("SELECT set_config('app.tenant_id', $1, true)", [scope.tenantId]);
+    const r = await client.query<{ industry: string | null }>(
       `SELECT industry FROM workspaces WHERE id=$1`, [scope.workspaceId]);
-    cachedIndustry = r.rows[0]?.industry ?? null;
+    await client.query("COMMIT");
+    const industry = r.rows[0]?.industry ?? null;
+    industryCache.set(scope.workspaceId, industry);
+    return industry;
   } catch {
-    cachedIndustry = null;
+    await client.query("ROLLBACK").catch(() => undefined);
+    return null; // 查询失败不缓存（下次重试），行业缺省落底座默认策略
+  } finally {
+    client.release();
   }
-  return cachedIndustry;
 }
 
 let cachedClassifier: IntentClassifier | null | undefined;
@@ -2842,19 +3448,10 @@ const captainRouter = router({
   grant: capabilityWriteProcedure("quest")
     .input(z.object({
       clauses: z.array(z.string()),
-      // HP-31 类型漂移修复：自治边界与基座 Charter 契约同形（{ ranges, caps }）
-      autonomy: z.object({
-        ranges: z.record(z.string(), z.object({
-          label: z.string().min(1).max(80),
-          lower: z.number(),
-          upper: z.number(),
-          anchor: z.number(),
-        })),
-        caps: z.record(z.string(), z.object({
-          label: z.string().min(1).max(80),
-          limit: z.number().nonnegative(),
-        })),
-      }),
+      // 自治边界与宪章 schema 同源（ranges/caps/lists）；旧的三字段形状
+      // （price_band/procurement_cap/campaign_cap）已被 .strict() 拒绝，
+      // 继续沿用会让授权在服务端 400、前端 P21 无法完成签署。
+      autonomy: autonomySchema,
       shadowDays: z.number().int().min(1).max(14).default(3),
       trialDays: z.number().int().min(3).max(30).default(7),
       identityConfirmed: z.boolean(), // §12.2 第⑤步身份核验（演示环境布尔确认）
@@ -3078,6 +3675,53 @@ const captainRouter = router({
       }
     }),
 
+  /**
+   * 决策队列快照（同一 SQL、同一快照）：分层计数 + 董事长队列一次读齐。
+   *
+   * 存在的理由：`theater.pendingByTier` 与 `chairmanQueue` 是两次独立读，节拍/审批在两次读之间
+   * 落库时会出现「徽标显示 N 件、列表为空」的自相矛盾（P21 与巡检用例都踩过：H-17 实测
+   * 期望 20 / 实际 0）。这里用**单条语句的 CTE** 取数——PostgreSQL 单语句一个快照，
+   * 两个聚合结果必然一致；写入侧并发再多也不会撕裂。
+   */
+  queueSnapshot: protectedProcedure.query(async ({ ctx }) => {
+    const scope = scopeOf(ctx.identity);
+    const app = getAppPool();
+    const client = await app.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
+      const r = await client.query<{ counts: Record<string, number>; items: Array<Record<string, unknown>> }>(
+        `WITH pending AS (
+           SELECT a.approval_id, a.event_id, a.snapshot, e.payload, a.tier
+           FROM approvals a
+           LEFT JOIN biz_events e ON e.event_id = a.event_id AND e.workspace_id = a.workspace_id
+           WHERE a.workspace_id=$1 AND a.status='pending'
+         )
+         SELECT
+           COALESCE((
+             SELECT jsonb_object_agg(t.tier, t.n)
+             FROM (SELECT tier, count(*)::int AS n FROM pending WHERE tier IS NOT NULL GROUP BY tier) t
+           ), '{}'::jsonb) AS counts,
+           COALESCE((
+             SELECT jsonb_agg(jsonb_build_object(
+               'approval_id', s.approval_id, 'event_id', s.event_id,
+               'snapshot', s.snapshot, 'payload', s.payload
+             ) ORDER BY s.approval_id)
+             FROM (SELECT * FROM pending WHERE tier='l4_chairman' ORDER BY approval_id LIMIT 20) s
+           ), '[]'::jsonb) AS items`,
+        [scope.workspaceId],
+      );
+      await client.query("COMMIT");
+      const row = r.rows[0];
+      return { counts: row?.counts ?? {}, items: row?.items ?? [], limit: 20 };
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw err;
+    } finally {
+      client.release();
+    }
+  }),
+
   /** 董事长请示队列（L4 pending + 事件依据链；P21 inline 三手势数据源） */
   chairmanQueue: protectedProcedure.query(async ({ ctx }) => {
     const scope = scopeOf(ctx.identity);
@@ -3087,10 +3731,12 @@ const captainRouter = router({
       await client.query("BEGIN");
       await client.query("SELECT set_config('app.workspace_id', $1, true)", [scope.workspaceId]);
       const r = await client.query<{
-        approval_id: string; event_id: string; snapshot: Record<string, unknown>; payload: Record<string, unknown>;
+        approval_id: string; event_id: string; snapshot: Record<string, unknown>; payload: Record<string, unknown> | null;
       }>(
+        // 左连接：事件行缺失（历史/测试夹具）的待批请示也必须出现在董事长队列里——
+        // 内连接会把它静默隐藏，而 theater 的分层计数仍计入，两端互斥（H-17 实测 17≠16）。
         `SELECT a.approval_id, a.event_id, a.snapshot, e.payload
-         FROM approvals a JOIN biz_events e ON e.event_id = a.event_id AND e.workspace_id = a.workspace_id
+         FROM approvals a LEFT JOIN biz_events e ON e.event_id = a.event_id AND e.workspace_id = a.workspace_id
          WHERE a.workspace_id=$1 AND a.status='pending' AND a.tier='l4_chairman'
          ORDER BY a.approval_id LIMIT 20`,
         [scope.workspaceId],
@@ -3165,9 +3811,11 @@ const captainRouter = router({
         [scope.workspaceId],
       );
       // 展示层过滤：E2E 测试标记（E2E-*）写入的晨报不返回给界面（哈希链不动、套件断言不受影响——套件直接查库）
+      // COALESCE 兜住 after.text 为 NULL 的事件：SQL 里 NULL NOT LIKE 'x' 结果是 NULL，
+      // 会把整行判成"不满足"而丢掉（审计 S3 根因）。
       const briefing = await client.query<{ payload: Record<string, unknown>; created_at: string }>(
         `SELECT payload, created_at FROM biz_events WHERE workspace_id=$1 AND payload->'decision'->>'action' IN ('ceo.briefing','ceo.board_pack')
-         AND payload->'decision'->'after'->>'text' NOT LIKE '%E2E-%'
+         AND COALESCE(payload->'decision'->'after'->>'text','') NOT LIKE '%E2E-%'
          ORDER BY seq DESC LIMIT 1`,
         [scope.workspaceId],
       );
@@ -3184,11 +3832,14 @@ const captainRouter = router({
          ORDER BY 1, seq DESC`,
         [scope.workspaceId],
       );
-      // ticker 同口径过滤测试噪声（E2E 标记与套件 mock 数据不进界面）
+      // ticker 同口径过滤测试噪声（E2E 标记与套件 mock 数据不进界面）。
+      // 注意不能直接写 after->>'text' NOT LIKE ...：dispatch/approve 等事件没有 after.text，
+      // NULL 会让整行被丢掉，导致实况流只剩"带文本"的少数动作（审计 S3/一般缺陷）；
+      // 首日上岗的"跨页面事实推导"（factsFromRecentActions）正是读这份 ticker。
       const events = await client.query<{ event_id: string; action: string; who: string; created_at: string }>(
         `SELECT event_id, payload->'decision'->>'action' AS action, payload->'who'->>'id' AS who, created_at
          FROM biz_events WHERE workspace_id=$1
-         AND payload->'decision'->'after'->>'text' NOT LIKE '%E2E-%'
+         AND COALESCE(payload->'decision'->'after'->>'text','') NOT LIKE '%E2E-%'
          AND payload->'decision'->>'action' NOT LIKE 'test.%'
          ORDER BY seq LIMIT 14`.replace("ORDER BY seq LIMIT", "ORDER BY seq DESC LIMIT"),
         [scope.workspaceId],
@@ -3366,39 +4017,6 @@ const memoryRouter = router({
       );
     }),
 
-  /** 停用/来源清算前读取真实影响关系；无引用时返回空数组而非推测（HP-31：补齐基座 procedure）。 */
-  impact: protectedProcedure
-    .input(z.object({
-      memoryId: z.string().optional(),
-      memberId: z.string().optional(),
-    }).refine((input) => Boolean(input.memoryId) !== Boolean(input.memberId), "必须且只能指定一条记忆或一名来源成员"))
-    .query(async ({ ctx, input }) => {
-      return previewMemoryImpact(getAppPool(), scopeOf(ctx.identity), {
-        memoryIds: input.memoryId ? [input.memoryId] : undefined,
-        sourceMemberId: input.memberId,
-      });
-    }),
-
-  /** 回收区单条重新启用，恢复本身写独立校准事件。 */
-  reactivate: actionProcedure("memory.manage")
-    .input(z.object({ memoryId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      return reactivateMemory(
-        getAppPool(), getGatewayPool(), scopeOf(ctx.identity),
-        { memberNo: ctx.identity.memberNo }, input.memoryId,
-      );
-    }),
-
-  /** 撤销最近一批来源清算；只恢复请求中仍处于回收区的本工作区记忆。 */
-  restore: actionProcedure("memory.manage")
-    .input(z.object({ memoryIds: z.array(z.string()).min(1).max(50) }))
-    .mutation(async ({ ctx, input }) => {
-      return restoreMemories(
-        getAppPool(), getGatewayPool(), scopeOf(ctx.identity),
-        { memberNo: ctx.identity.memberNo }, input.memoryIds,
-      );
-    }),
-
   /** 手动触发提炼节拍（演示/联调用；生产由夜班调度触发） */
   mineNow: writeProcedure.mutation(async ({ ctx }) => {
     return runMemoryMinerBeat(getAppPool(), getGatewayPool(), scopeOf(ctx.identity));
@@ -3408,6 +4026,39 @@ const memoryRouter = router({
   decayNow: writeProcedure.mutation(async ({ ctx }) => {
     return decayMemories(getAppPool(), getGatewayPool(), scopeOf(ctx.identity));
   }),
+
+  /**
+   * 高影响操作的服务端事实预览（P23）：停用/清算前先给出受影响员工/规则/在跑任务，
+   * 只报告已有引用关系，不猜。前端以 memoryId（单条）或 memberId（来源人清算）二选一调用。
+   */
+  impact: protectedProcedure
+    .input(z.object({
+      memoryId: z.string().min(1).optional(),
+      memberId: z.string().min(1).optional(),
+    }))
+    .query(async ({ ctx, input }) => previewMemoryImpact(getAppPool(), scopeOf(ctx.identity), {
+      ...(input.memoryId ? { memoryIds: [input.memoryId] } : {}),
+      ...(input.memberId ? { sourceMemberId: input.memberId } : {}),
+    })),
+
+  /**
+   * 记忆恢复（P23 意识系统）：回收态记忆只能由人手动恢复，恢复动作独立留痕，
+   * 历史停用记录保持不变（服务层 restoreMemories/reactivateMemory 已实现，
+   * 之前只有实现没有端点，前端 P23 的恢复按钮必然 404）。
+   */
+  restore: writeProcedure
+    .input(z.object({ memoryIds: z.array(z.string().min(1)).min(1).max(50) }))
+    .mutation(async ({ ctx, input }) => restoreMemories(
+      getAppPool(), getGatewayPool(), scopeOf(ctx.identity),
+      { memberNo: ctx.identity.memberNo }, input.memoryIds,
+    )),
+
+  reactivate: writeProcedure
+    .input(z.object({ memoryId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => reactivateMemory(
+      getAppPool(), getGatewayPool(), scopeOf(ctx.identity),
+      { memberNo: ctx.identity.memberNo }, input.memoryId,
+    )),
 
   /** 本工作区装配的反馈枚举表（Bundle 第⑧槽；审批卡下拉数据源） */
   feedbackEnums: protectedProcedure.query(async ({ ctx }) => {
@@ -3446,7 +4097,12 @@ export const appRouter = router({
   modelFeedback: modelFeedbackRouter,
   memory: memoryRouter,
   evolution: evolutionRouter,
-  // HP-31 类型漂移修复：基座 HP-01 新增的租户覆盖层路由（apps/web P26/P27 已按基座契约调用）
+  // 获客控制台（行业扩展页 p10–p20 的数据面）：意图洞察→触达→承接→转化→归因
+  acquisition: acquisitionRouter,
+  // 协作底座（规模化协作设计 §3–§4）：对象读模型/任务契约/交接回执/决策配额/组合看板/数字人叙事
+  collaboration: collaborationRouter,
+  // 租户覆盖层（P26/P27）：实现早已随服务端构建，但此前从未挂载进根路由，
+  // 三端 overlay.* 调用全部落到 404。挂载即生效，端点自身仍是受控守卫。
   overlay: overlayRouter,
 });
 
@@ -3456,22 +4112,3 @@ export type { TrpcContext } from "./context.js";
 export type { ExamSummary } from "../service/eval.js";
 export type { BundleInstall, StaffingDraft } from "../service/bundle.js";
 export type { IntelItem, RepoPulse } from "../service/aipm.js";
-
-/**
- * 启动期接线（本文件属**行业仓保留组合根**，在 sync 白名单之外）：
- * 公共运行时不得反向依赖行业资产，因此两类行业接线在此注入——
- *   ① X-04：客户知识库检索接进 ask 事实面（读本仓 `service/kb.ts`）；
- *   ② N-14/GR-16：行业精细规划器（读本仓 `industry/<行业>/acquisition-planner.ts`），
- *      未注册时 runQuestForThread 退回确定性通用规划。
- * 本模块随服务启动加载（index.ts 导入 appRouter），注册早于任何派遣/调度执行。
- */
-registerIndustryQuestPlanner((goal) => acquisitionQuestPlanner(goal));
-registerAskKbSearch(async (scope, question, limit) => {
-  const hits = await searchKB({ workspaceId: scope.workspaceId, query: question, limit });
-  return hits.map((hit) => ({
-    content: hit.content,
-    ...(hit.heading ? { heading: hit.heading } : {}),
-    ...(hit.documentTitle ? { documentTitle: hit.documentTitle } : {}),
-    documentId: hit.documentId,
-  }));
-});

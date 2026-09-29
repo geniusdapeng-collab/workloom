@@ -1,20 +1,38 @@
 import { describe, expect, it } from "vitest";
-import { actionText, actorText, approvalGestureText, chineseDisplayName, floorStatusText, hydrateClientSafeTerms, hydrateDisplayTerminology, payloadText, skillDisplayName, versionText } from "./display";
-import { clientChineseText } from "@workloom/ui";
+import { actionText, actorText, approvalGestureText, chineseDisplayName, hydrateDisplayTerminology, payloadText, skillDisplayName, versionText } from "./display";
 
-describe("技能中文展示名（基座：技能中心不得裸奔内部 id）", () => {
-  it("首段即中文短名（含破折号分隔）", () => {
-    expect(skillDisplayName("dev-dispatch", "开发任务派发——选机床、建隔离 worktree、快照、启动受管会话。")).toBe("开发任务派发");
-    expect(skillDisplayName("kb-fresh", "知识库保鲜巡检——过期检测（模型版本/价格/政策失效）…")).toBe("知识库保鲜巡检");
+describe("技能中文展示名（不向客户端裸奔技术串）", () => {
+  it("技能说明首段即中文名", () => {
+    expect(skillDisplayName("checkin-checkout", "入住退房全流程套件。覆盖到店/离店…")).toBe("入住退房全流程套件");
   });
 
-  it("首段夹带技术记号时剔除后再取（PRD/eval/LLM 这类词不进技能名）", () => {
-    expect(skillDisplayName("eval-forge", "评测集锻造。从 PRD/需求自动生成可执行 eval 集（30-40 案例起步）…")).toBe("评测集锻造");
-    expect(chineseDisplayName("gh API 读取 issue/PR 提交节奏", "github-pulse")).toBe("读取 提交节奏");
+  it("首段夹带技术记号时剔除记号再取中文名", () => {
+    expect(skillDisplayName("comment-ops", "评论三级分流 SOP 官方套件（随 bundles/ai-video 分发）：…")).toBe("评论三级分流 官方套件");
+    expect(skillDisplayName("publish-ops", "全平台 RPA 发布纪律官方套件（随 bundles/ai-video 分发）：…")).toBe("全平台 发布纪律官方套件");
+    // 破折号左边就是名字，右边是解释：取「线索管家」，不再把整句当名字
+    expect(skillDisplayName("lead-concierge", "线索管家——四路承接应答留资 SOP。…")).toBe("线索管家");
   });
 
-  it("实在取不到中文名才回落原 id", () => {
-    expect(skillDisplayName("some-skill", "")).toBe("some-skill");
+  it("技术串剔除后为空时回落下一个分隔符或原始 id", () => {
+    // 首段本身就是纯技术串（SOP/RPA/Brief/query/Y…）时，剔除后没剩中文 → 回落原 id，不硬造词
+    expect(skillDisplayName("sop-only", "SOP（随包分发）：…")).toBe("sop-only");
+    expect(skillDisplayName("query-skill", "query：…")).toBe("query-skill");
+  });
+
+  it("破折号也当名字结束符（无句号/冒号的长说明不再裸奔英文 id）", () => {
+    expect(skillDisplayName("coupon-ops", "团购券运营——通兑券/预售券 SKU 设计、库存熔断、定价红线…")).toBe("团购券运营");
+    expect(skillDisplayName("intent-radar", "意图雷达——竞对评论区/OTA差评/query 搜索词…")).toBe("意图雷达");
+    expect(skillDisplayName("hotel-geo-content", "酒店 GEO 内容——AI 答案版探店图文创作：「XX市XX酒店怎么选」类 query…")).toBe("酒店 GEO 内容");
+  });
+
+  it("词典认可的行业词保留原样（GEO 不被误剔）", () => {
+    expect(skillDisplayName("ai-answer-rewrite", "GEO 六段式改写官方套件（随 bundles/geo-growth 分发）：…")).toBe("GEO 六段式改写官方套件");
+  });
+
+  it("通栏装载事件名剔除拉丁记号，无法中文化才回落中性兜底", () => {
+    expect(chineseDisplayName("Y 域分发技能", "技能能力")).toBe("域分发技能");
+    expect(chineseDisplayName("comment-ops", "技能能力")).toBe("技能能力");
+    expect(chineseDisplayName("", "技能能力")).toBe("技能能力");
   });
 });
 
@@ -55,36 +73,11 @@ describe("行业术语投影", () => {
   });
 });
 
-describe("审批手势文案", () => {
+describe("业务关卡放行手势文案", () => {
   it("只展示受控字典文案，不直出手势码", () => {
-    expect(approvalGestureText("approve")).toBe("已批准");
-    expect(approvalGestureText("edit")).toBe("已修改后批准");
-    expect(approvalGestureText("reject")).toBe("已驳回");
-    expect(approvalGestureText("private_gesture")).toBe("审批已处理");
-  });
-});
-
-describe("数字职场气泡（内部动作码先经动作字典）", () => {
-  it("请示/最近/遇阻/刚完成前缀后的动作码映射为中文", () => {
-    hydrateDisplayTerminology({ "action.competitor.fetch": "竞对价格抓取", "action.price.adjust": "调价审批" });
-    expect(floorStatusText("最近：competitor.fetch", "当前状态待确认")).toBe("最近：竞对价格抓取");
-    expect(floorStatusText("请示待裁：price.adjust", "当前状态待确认")).toBe("请示待裁：调价审批");
-    expect(floorStatusText("遇阻：inspection.scan", "当前状态待确认")).toBe("遇阻：扫描");
-  });
-
-  it("未收录动作码也给中文兜底，不裸奔原始码；中文状态原样保留", () => {
-    hydrateDisplayTerminology({});
-    expect(floorStatusText("最近：vendor.unknown.thing", "当前状态待确认")).toBe("最近：系统操作");
-    expect(floorStatusText("飞猪渠道新客首图发布", "当前状态待确认")).toBe("飞猪渠道新客首图发布");
-    expect(floorStatusText("", "待命")).toBe("待命");
-  });
-});
-
-describe("行业术语白名单投影", () => {
-  it("行业包声明的术语放行，切换工作区后清空", () => {
-    hydrateClientSafeTerms(["WiFi", "OCC"]);
-    expect(clientChineseText("客房 WiFi 密码为房间号后四位", "信息待确认")).toBe("客房 WiFi 密码为房间号后四位");
-    hydrateClientSafeTerms([]);
-    expect(clientChineseText("客房 WiFi 密码为房间号后四位", "信息待确认")).toBe("信息待确认");
+    expect(approvalGestureText("approve")).toBe("已放行");
+    expect(approvalGestureText("edit")).toBe("改后放行");
+    expect(approvalGestureText("reject")).toBe("已退回");
+    expect(approvalGestureText("private_gesture")).toBe("关卡已处理");
   });
 });

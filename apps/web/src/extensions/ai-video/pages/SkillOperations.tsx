@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { BannerAlert } from "../../../components/hud";
-import { Skeleton } from "@workloom/ui";
+import { BannerAlert, Skeleton } from "../../../components/hud";
 import { ensureDemoLogin, trpc } from "../../../lib/trpc";
 import { Bridge } from "../../../shell/Bridge";
 import { EvolutionZone } from "../components/skills/EvolutionZone";

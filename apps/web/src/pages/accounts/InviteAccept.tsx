@@ -38,8 +38,6 @@ export default function InviteAccept() {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md min-w-0 flex-col justify-center px-4 py-10 sm:px-6">
-      {/* 邀请页由外部链接直达（bare 路由，无左侧导航）；除"去登录"外再给一条回应用的出口。 */}
-      <Button className="mb-4 w-fit text-neutral-300 underline" variant="quiet" onClick={() => nav("/")}>← 返回经营首页</Button>
       <h1 className="mb-1 break-words text-2xl font-bold">接受邀请</h1>
       <p className="mb-6 break-words text-body leading-relaxed text-neutral-300">输入邀请消息中的 6 位邀请码；验证成功后会自动加入邀请指定的工作区。</p>
       <div className="min-w-0 space-y-3">
@@ -50,6 +48,7 @@ export default function InviteAccept() {
       {err && <p role="alert" className="mt-3 break-words text-body leading-relaxed text-red-300">{err}</p>}
       <Button className="mt-5 w-full" variant="primary" busy={busy} busyLabel="正在加入…" disabled={phone.length < 6 || code.length !== 6} onClick={() => void submit()}>加入工作区</Button>
       <Button className="mt-4 text-neutral-300 underline" variant="quiet" onClick={() => nav("/login")}>去登录</Button>
+      <Button className="mt-2 text-neutral-300 underline" variant="quiet" onClick={() => nav("/")}>← 返回经营主页</Button>
     </main>
   );
 }

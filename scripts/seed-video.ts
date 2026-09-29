@@ -4,9 +4,13 @@
  * 与 scripts/seed.ts（酒店 Bundle）同构，装载：
  *  - 演示租户/工作区（industry: ai-video）
  *  - 人类成员（主理人/运营/剪辑）
- *  - bundles/ai-video 的 33 个数码员工 preset（制作 21 + 经营 12；含 fence_bindings 原样落库）
- *  - ai-video-baseline/v2 基线围栏（G1-G10 系列 15 条 + 经营扩展 G11-G16 共 21 条）
- *  - 8 个官方技能（安装即绑定围栏）
+ *  - bundles/ai-video 的 37 个数码员工 preset（制作 21 + 经营 12 + 后期 4：调色师 / BGM 配乐师 / 字幕师 / 配音师；含 fence_bindings 原样落库）
+ *  - 字幕师自带 29 款随包字体（library/fonts：档案 sha256 ↔ 随包文件 ↔ bundle 完整性索引 三层校验）与 16 条版式配方
+ *  - 围栏 46 条：ai-video-baseline/v2（G1-G16 共 21 条）+ ai-video-color/v1（成片调色门 G-COL0..G-COL4 共 5 条）
+ *    + ai-video-bgm/v1（成片配乐门 G-BGM0..G-BGM5 共 6 条）+ ai-video-subtitle/v2（文字层门 G-SUB0..G-SUB6 共 7 条：字幕/标题/弹幕/贴纸/卡拉OK）
+ *    + ai-video-voice/v1（本地声音克隆/配音门 G-VOICE0..G-VOICE6 共 7 条）
+ *  - 27 个官方技能（安装即绑定围栏；含调色师四件套、BGM 配乐师五件套、字幕师五件套与配音师五件套
+ *    voice-clone-consent / voice-reference-craft / voice-profile-craft / voice-dubbing-sync / voice-delivery-spec）
  *  - 一企一档（品牌档案 + forbidden 红线）
  *  - 自动化触发器（每 2h 数据采集 / 早八点战报 / 每 30min 评论采集）
  *  - 演示项目：1 个 video_project + 3 镜渲染脚本（v1）+ 2 条素材
@@ -14,6 +18,7 @@
  * 幂等可复跑（全部 ON CONFLICT DO NOTHING / DO UPDATE）。
  * 运行：pnpm db:seed:video
  */
+import { COMPOSED_SKILL_BINDINGS } from "./skill-bindings.mts";
 import pg from "pg";
 import YAML from "yaml";
 import { readFileSync, readdirSync } from "node:fs";
@@ -21,8 +26,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { safeParseBusinessEvent } from "@workloom/shared";
 // 哈希链统一生产口径（events.ts 的 canonicalJson/eventHash），与 seed.ts 同一纪律
-import { eventHash } from "@workloom/base/workdata";
-import { alignReadableIdSequences } from "@workloom/base/workdata";
+import { alignReadableIdSequences, eventHash } from "@workloom/base/workdata";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
@@ -84,17 +88,30 @@ interface FenceRule {
   note?: string;
 }
 
+/**
+ * 围栏装载：以 bundle.json 的 provides.fences 为唯一事实源（与 seed-geo 同构）。
+ * 新增围栏包（如 fences/ai-video-color.yml 的成片调色门 G-COL0..G-COL4、
+ * fences/ai-video-bgm.yml 的成片配乐门 G-BGM0..G-BGM5）无需再改本脚本。
+ */
 function loadFences(): FenceRule[] {
-  const doc = YAML.parse(
-    readFileSync(join(BUNDLE_DIR, "fences/ai-video-baseline.yml"), "utf-8"),
-  );
-  return (doc?.rules ?? []) as FenceRule[];
+  const manifest = JSON.parse(readFileSync(join(BUNDLE_DIR, "bundle.json"), "utf-8"));
+  const declared: string[] = manifest?.workloom?.provides?.fences ?? ["fences/ai-video-baseline.yml"];
+  const out: FenceRule[] = [];
+  for (const relative of declared) {
+    const doc = YAML.parse(readFileSync(join(BUNDLE_DIR, relative), "utf-8"));
+    for (const rule of (doc?.rules ?? []) as FenceRule[]) {
+      out.push({ ...rule, packVersion: (doc?.version as string) ?? FENCE_VERSION });
+    }
+  }
+  return out;
 }
 
 interface SkillDoc {
   name: string;
   description: string;
   body: string;
+  /** 安装时快照到 skill_installs.fence_bindings_snapshot 的围栏绑定（#17 口径） */
+  fenceBindings?: string[];
 }
 
 /** 管线 YAML 解析校验：管线由 Quest 调度器直接消费 YAML，此处解析计数确保可解析 */
@@ -117,10 +134,14 @@ function loadSkills(): SkillDoc[] {
       const raw = readFileSync(join(dir, d, "SKILL.md"), "utf-8");
       const m = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
       const fm = YAML.parse(m?.[1] ?? "{}");
+      const name = String(fm.name ?? d);
       return {
-        name: String(fm.name ?? d),
+        name,
         description: String(fm.description ?? ""),
         body: (m?.[2] ?? "").trim(),
+        // 围栏绑定以 scripts/skill-bindings.mts 为唯一事实源（与 seed.ts/seed-geo.ts 共用），
+        // 不在本脚本里另立一份绑定表——否则同一技能在不同工作区会绑到不同围栏。
+        fenceBindings: COMPOSED_SKILL_BINDINGS["ai-video"][name] ?? [],
       };
     });
 }
@@ -174,10 +195,16 @@ function studioArchive(): Record<string, unknown> {
       mode: "trial",
       identity: { name: "公司CEO", persona: "内容经营型" },
       autonomy: {
-        publish_per_day_cap: 3,
-        boost_budget_per_post: 500,
-        price_quote_band: [0.9, 1.2],
-        reply_auto_scope: ["夸赞", "感谢"],
+        ranges: {
+          price_quote_band: { label: "报价相对基准区间", lower: 0.9, upper: 1.2, anchor: 1 },
+        },
+        caps: {
+          publish_per_day_cap: { label: "账号每日发布条数上限", limit: 3 },
+          boost_budget_per_post: { label: "单条投流预算上限", limit: 500 },
+        },
+        lists: {
+          reply_auto_scope: ["夸赞", "感谢"],
+        },
       },
       escalate: ["对外公开承诺（赔偿/免费/声明）", "广告法敏感口径", "围栏规则放宽（任何放宽）", "新平台/新账号上线", "月累计投流超上限", "低于底价报价让步", "投放加投（G12 必审）", "宪章变更"],
       briefing: { daily: "08:30", weekly: "Mon 09:00", monthly: "1st 10:00", channel: "both" },
@@ -199,9 +226,10 @@ function studioArchive(): Record<string, unknown> {
         key: "project",
         name: "项目制（单剧/单项目核算）",
         autonomy: {
+          ranges: {},
           caps: {
-            "render-budget": { label: "单集渲染额度上限", limit: 300 },
-            "render-retry": { label: "渲染重试次数上限", limit: 5 },
+            render_budget_per_episode: { label: "单集渲染预算上限", limit: 300 },
+            render_retry_cap: { label: "单集渲染重试次数上限", limit: 5 },
           },
         },
         circuit_breaker: { kpi_floor: { roi_iaa: 0.98, scrap_rate: 0.85 } },
@@ -210,10 +238,11 @@ function studioArchive(): Record<string, unknown> {
         key: "contract",
         name: "合同制（商单履约 SLA）",
         autonomy: {
+          ranges: {},
           caps: {
-            "publish-per-day": { label: "每日发布条数上限", limit: 2 },
-            "content-reject-rounds": { label: "内容打回轮次上限", limit: 3 },
-            "response-time-slo": { label: "响应时长上限（小时）", limit: 4 },
+            publish_per_day_cap: { label: "账号每日发布条数上限", limit: 2 },
+            content_reject_rounds_cap: { label: "内容打回轮次上限", limit: 3 },
+            response_time_slo_hours: { label: "商单响应时长上限（小时）", limit: 4 },
           },
         },
         circuit_breaker: { kpi_floor: { sla_hit_rate: 0.9 } },
@@ -287,7 +316,12 @@ async function main() {
     await q(
       `INSERT INTO agents (id, workspace_id, preset_key, name, version, kind, readonly, fence_bindings, skills, status, meta)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'ready',$10)
-       ON CONFLICT (id) DO NOTHING`,
+       ON CONFLICT (id) DO UPDATE SET
+         name = EXCLUDED.name, version = EXCLUDED.version, kind = EXCLUDED.kind,
+         readonly = EXCLUDED.readonly, fence_bindings = EXCLUDED.fence_bindings,
+         skills = EXCLUDED.skills, status = 'ready', meta = EXCLUDED.meta
+       WHERE agents.version IS DISTINCT FROM EXCLUDED.version
+          OR agents.meta IS DISTINCT FROM EXCLUDED.meta`,
       [
         `agt-${p.preset_key}`,
         WS_ID,
@@ -322,11 +356,25 @@ async function main() {
   console.log("✓ 一企一档（含 forbidden 红线 ×3）");
 
   // 基线围栏装载（G1-G10 系列，active）
+  //
+  // 2026-09-23 修订：原先 `DO NOTHING` 导致「改了围栏包 → 重跑种子不生效」（版本号是常量，
+  // 唯一键 (rule_id, version, workspace_id) 永远命中旧行）——字幕师新增弹幕/贴纸围栏时就踩到了：
+  // 库里 G-SUB0 的 actions 仍是旧清单，弹幕步被判成"无规则命中→默认 review"而挂起。
+  // 现改为**单调升级**：等级更严（auto < review < block）或同级时用包内事实刷新 name/level/match_spec/action；
+  // 等级更松（试图放宽围栏）则整条跳过，保持"覆盖层只收紧"的不变量。
+  const FENCE_LEVEL_RANK: Record<string, number> = { auto: 0, review: 1, block: 2 };
   for (const r of fences) {
     await q(
       `INSERT INTO fence_rules (id, rule_id, version, workspace_id, name, level, match_spec, action, is_baseline, status, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'active','system:seed')
-       ON CONFLICT (rule_id, version, workspace_id) DO NOTHING`,
+       ON CONFLICT (rule_id, version, workspace_id) DO UPDATE
+         SET name = EXCLUDED.name,
+             level = EXCLUDED.level,
+             match_spec = EXCLUDED.match_spec,
+             action = EXCLUDED.action,
+             is_baseline = EXCLUDED.is_baseline,
+             status = 'active'
+       WHERE $10 >= CASE fence_rules.level WHEN 'block' THEN 2 WHEN 'review' THEN 1 ELSE 0 END`,
       [
         `fr-${r.rule_id.toLowerCase()}-v1-${WS_ID}`,
         r.rule_id,
@@ -340,6 +388,7 @@ async function main() {
           note: r.note ?? "",
         }),
         r.is_baseline,
+        FENCE_LEVEL_RANK[r.level] ?? 1,
       ],
     );
   }
@@ -348,19 +397,44 @@ async function main() {
   // 官方技能 + 安装绑定（F8.1/F8.2）
   for (const s of skillsDocs) {
     const skillId = `skill-${s.name}`;
+    // 与 seed.ts 同口径（#17 安装时快照 + D15-⑤ installed_version）：
+    // 技能行按版本升级 body/绑定；安装行快照取自技能行，保证 seed 与运行时两条路径的围栏并集一致。
     await q(
       `INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized)
-       VALUES ($1,'official','ai-video',$2,'1.0.0',$3,'[]',$4,false)
-       ON CONFLICT (id) DO NOTHING`,
-      [skillId, s.name, s.description, s.body],
+       VALUES ($1,'official','ai-video',$2,'1.0.0',$3,$4,$5,false)
+       ON CONFLICT (id) DO UPDATE SET bundle = EXCLUDED.bundle, body = EXCLUDED.body, version = EXCLUDED.version,
+                                      fence_bindings = EXCLUDED.fence_bindings
+       WHERE skills.version IS DISTINCT FROM EXCLUDED.version`,
+      [skillId, s.name, s.description, JSON.stringify(s.fenceBindings ?? []), s.body],
     );
     await q(
-      `INSERT INTO skill_installs (skill_id, workspace_id, installed_by)
-       VALUES ($1,$2,'MEM-V01') ON CONFLICT (skill_id, workspace_id) DO NOTHING`,
+      `INSERT INTO skill_installs (skill_id, workspace_id, installed_by, fence_bindings_snapshot, installed_version)
+       SELECT s.id, $2, 'MEM-V01', s.fence_bindings, s.version FROM skills s WHERE s.id = $1
+       ON CONFLICT (skill_id, workspace_id) DO NOTHING`,
       [skillId, WS_ID],
     );
   }
   console.log(`✓ 官方技能 ×${skillsDocs.length} 已安装`);
+
+  /**
+   * 装配台账登记（bundle_installs）：游客首启入口按「is_example + 该 Bundle 有 active 安装行」
+   * 发现示例工作区，漏登记会导致 ai-video 演示工作区进不去。与 scripts/seed.ts 同口径。
+   */
+  await q(
+    `INSERT INTO bundle_installs (id, workspace_id, bundle_id, assets, status)
+     VALUES ($1,$2,'ai-video',$3,'active')
+     ON CONFLICT (id) DO NOTHING`,
+    [
+      `bi-${WS_ID}-ai-video`,
+      WS_ID,
+      JSON.stringify({
+        preset_ids: presets.map((p) => `agt-${p.preset_key}`),
+        fence_rule_ids: fences.map((r) => `fr-${r.rule_id.toLowerCase()}-v1-${WS_ID}`),
+        skill_ids: skillsDocs.map((s) => `skill-${s.name}`),
+      }),
+    ],
+  );
+  console.log("✓ 装配台账登记（bundle_installs）");
 
   // 工艺技能库注册（203 好莱坞 + 20 营销 → 技能广场可见；team 级已装）
   const craftSkills = loadLibrarySkills();
@@ -373,8 +447,9 @@ async function main() {
       [skillId, s.name, s.description, s.body],
     );
     await q(
-      `INSERT INTO skill_installs (skill_id, workspace_id, installed_by)
-       VALUES ($1,$2,'MEM-V01') ON CONFLICT (skill_id, workspace_id) DO NOTHING`,
+      `INSERT INTO skill_installs (skill_id, workspace_id, installed_by, fence_bindings_snapshot, installed_version)
+       SELECT s.id, $2, 'MEM-V01', s.fence_bindings, s.version FROM skills s WHERE s.id = $1
+       ON CONFLICT (skill_id, workspace_id) DO NOTHING`,
       [skillId, WS_ID],
     );
   }
@@ -479,7 +554,7 @@ async function main() {
   await q(
     `INSERT INTO night_runs (id, workspace_id, run_date, status, fence_snapshot_version, candidate_count, stats, started_at, package_event_id)
      VALUES ($1,$2,$3,'package_generated',$4,14,$5,$6,NULL)
-     ON CONFLICT (id) DO NOTHING`,
+     ON CONFLICT (workspace_id, run_date) DO NOTHING`,
     [
       `nr-video-${runDate}`, WS_ID, runDate, FENCE_VERSION,
       JSON.stringify({ done: 14, pending: 2, alerts: 1, note: "评论分流 47 条 / 数据采集 12 轮 / 谷时渲染 S00 完成 / 早八点战报已生成" }),
@@ -635,6 +710,13 @@ async function main() {
     const ev = mkEvent(i, times[i - 1] as Date);
     const checked = safeParseBusinessEvent(ev);
     if (!checked.success) throw new Error(`种子事件 ${ev.event_id} 未过校验：${checked.error.message}`);
+    /**
+     * 幂等口径（2026-09-20 真机验收修复）：先查存在再写，重复 seed 不再消耗 nextval。
+     * 旧写法 ON CONFLICT DO NOTHING 每条冲突烧一个序号，复跑后 verify-chain 会报
+     * 「>500 连续空洞，疑似恶意删段」；与基座 seed.ts 的 L1.4 口径对齐。
+     */
+    const exists = await gw.query(`SELECT 1 FROM biz_events WHERE tenant_id=$1 AND event_id=$2`, [TENANT_ID, ev.event_id]);
+    if (exists.rowCount) continue;
     const payload = JSON.stringify(checked.data);
     const hash = eventHash(prevHash, checked.data);
     const res = await gw.query(
@@ -756,11 +838,10 @@ async function main() {
   );
   console.log("✓ AI 服务前台运行态（星芒好物）：用户/售后政策知识库/会话/工单×2/时间线/通知");
 
-    // GR-02（2026-09-29 第二次修复，基座 T-2026-0929-0003）：手写号段写入方收尾对齐号源。
-  // 取号函数只做 nextval（0050 把 max() 读回取号函数导致并发撞号且不收敛）；
-  // "序列落后于手写 id"的问题必须在**写入方**解决——只抬不降、幂等，可重复执行。
-  const seqFloor = await alignReadableIdSequences(owner, { threads: true, videoProjects: true });
+  // GR-02（2026-09-29 第二次修复）：手写 VID-*/T-* 号段写入方收尾对齐号源（取号函数只做 nextval）
+  const seqFloor = await alignReadableIdSequences(owner);
   console.log(`✓ 可读号源对齐：threads→${seqFloor.threads}，video_projects→${seqFloor.videoProjects}`);
+
   await owner.end();
   console.log("\n视频经理演示种子完成。下一步：pnpm dev 后在工作台查看（ws-video 工作区）。");
 }

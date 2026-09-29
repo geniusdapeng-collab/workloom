@@ -15,6 +15,10 @@
 import {
   routeSmart, type EventSink, type ModelPolicy, type ModelProvider, type PlanId,
 } from "@workloom/base/model-router";
+import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, resolve as resolvePath } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export interface LLMReasonOptions {
   model?: string;
@@ -257,5 +261,152 @@ export class WorkloomLLMEngine {
     options: LLMReasonOptions = {}
   ): Promise<LLMReasonResult> {
     return this.reason(prompt, { ...options, forceJson: true });
+  }
+
+  /**
+   * vendor 内部助手方法（2026-09-22 真机修复）
+   *
+   * `engines/requirement-discovery-engine.js:260` 直接调 `llmEngine._extractJsonObject(content)`；
+   * 注入的是本适配器时该方法不存在 → `SceneArchitect` 连续两次失败 →
+   * 日志出现「❌ 全部失败，使用兜底规则」→ 场景设计整段退化为规则模板（下游再补齐）。
+   * 这里补上与 vendor `systems/llm-reasoning-engine.js:106` 同语义的实现（失败返回 null，不抛）。
+   */
+  _extractJsonObject(text: unknown): string | null {
+    /**
+     * 与 vendor `systems/llm-reasoning-engine.js#_extractJsonObject` **同语义**：
+     * 返回**JSON 文本字符串**（调用方自己 `JSON.parse`），非字符串输入返回 null。
+     *
+     * 真机教训（VID-1022）：首版实现返回已解析对象，而
+     * `requirement-discovery-engine.js:262` 是 `return JSON.parse(extracted)` →
+     * `JSON.parse(对象)` 走 `String(对象)` → `"[object Object]" is not valid JSON`，
+     * SceneArchitect 仍然全失败。此实现含输入截断与扫描预算，避免大响应冻结事件循环。
+     */
+    if (!text || typeof text !== "string") return null;
+    const MAX_INPUT_LEN = 200_000;
+    const input = text.length > MAX_INPUT_LEN ? text.slice(0, MAX_INPUT_LEN) : text;
+
+    const fenced = input.match(/```json\s*([\s\S]*?)\s*```/i);
+    if (fenced?.[1]) {
+      const candidate = fenced[1].trim();
+      try {
+        JSON.parse(candidate);
+        return candidate;
+      } catch {
+        /* 继续 */
+      }
+    }
+    const whole = input.trim();
+    if (whole) {
+      try {
+        JSON.parse(whole);
+        return whole;
+      } catch {
+        /* 继续 */
+      }
+    }
+    // 单次栈扫描找"顶层完整 JSON"候选（与 vendor 同算法，带 300ms 预算、不阻塞事件循环）
+    const stack: Array<"{" | "["> = [];
+    let inString = false;
+    let escaped = false;
+    let start = -1;
+    const budgetStart = Date.now();
+    let ops = 0;
+    for (let i = 0; i < input.length; i += 1) {
+      if ((++ops & 0x3fff) === 0 && Date.now() - budgetStart > 300) break;
+      const ch = input[i]!;
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (ch === "\\") escaped = true;
+        else if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') {
+        inString = true;
+        continue;
+      }
+      if (ch === "{" || ch === "[") {
+        if (stack.length === 0) start = i;
+        stack.push(ch);
+        continue;
+      }
+      if (ch === "}" || ch === "]") {
+        const open = stack.pop();
+        const matches = (open === "{" && ch === "}") || (open === "[" && ch === "]");
+        if (!matches) {
+          stack.length = 0;
+          start = -1;
+          continue;
+        }
+        if (stack.length === 0 && start >= 0) {
+          const candidate = input.slice(start, i + 1);
+          try {
+            JSON.parse(candidate);
+            return candidate;
+          } catch {
+            start = -1;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  /** vendor 调用点清理钩子（无持久连接，空实现保持接口一致） */
+  async close(): Promise<void> {
+    return undefined;
+  }
+
+  /** vendor 调用点统计钩子（返回本适配器的真实统计） */
+  getStats(): { totalCalls: number; totalFailures: number; model: string } {
+    return { ...this.stats, model: this.cfg.model };
+  }
+}
+
+/**
+ * vendor 自建 LLMEngine 的「原型桥」（2026-09-21 真机修复）
+ *
+ * 问题：vendor 多条链路（剧本引擎、需求洞察子引擎、提示词/微动作…）会**自己** `new LLMEngine({...})`，
+ * 读的是 vendor 自己的环境变量（LLM_ENDPOINT / KIMI_API_KEY …）与模型名（kimi-k2p6）。
+ * 宿主注入的适配器只在主流水线生效，于是这些环节全部失败：
+ *   `[ScriptGenerator] LLM引擎返回失败: API Key 未配置` → 剧本生成重试 3 次 → 预生产 pipeline.failed。
+ *
+ * 做法：**不改 vendor 目录**（只读纪律），在运行时把 vendor LLMEngine 原型的四个调用点
+ * （reason / reasonRaw / reasonStructured / chat）重定向到宿主适配器 —— 这些方法被整体替换，
+ * 构造函数里那句 `_noApiKey` 判断自然失效，模型/端点/计量/事件留痕全部走 WorkLoom 模型路由。
+ *
+ * 幂等：重复调用只覆盖一次；返回摘除函数（恢复原方法），便于测试与热重载。
+ */
+export function installVendorEngineBridge(engine: WorkloomLLMEngine): () => void {
+  try {
+    // 仓库根按**本模块位置**解析（服务进程 cwd 是 apps/server，用 cwd 会找不到 vendor）
+    const repoRoot = resolvePath(dirname(fileURLToPath(import.meta.url)), "../../..");
+    const vendorRequire = createRequire(resolvePath(repoRoot, "package.json"));
+    const enginePath = resolvePath(repoRoot, "vendor/supermickey/systems/llm-reasoning-engine.js");
+    if (!existsSync(enginePath)) return () => undefined;
+    const mod = vendorRequire(enginePath) as { LLMEngine?: { prototype: Record<string, unknown> } };
+    const prototype = mod?.LLMEngine?.prototype;
+    if (!prototype) return () => undefined;
+    const patched: Array<[string, unknown]> = [];
+    const redirect = (name: string, impl: (...args: unknown[]) => unknown) => {
+      if (typeof prototype[name] !== "function") return;
+      patched.push([name, prototype[name]]);
+      prototype[name] = impl;
+    };
+    redirect("reason", (prompt: unknown, options: unknown = {}) =>
+      engine.reason(String(prompt ?? ""), options as LLMReasonOptions));
+    redirect("reasonRaw", (prompt: unknown, options: unknown = {}) =>
+      engine.reasonRaw(String(prompt ?? ""), options as LLMReasonOptions));
+    redirect("reasonStructured", (prompt: unknown, schema: unknown, options: unknown = {}) =>
+      engine.reasonStructured(String(prompt ?? ""), { ...(options as LLMReasonOptions), ...(schema ? { responseFormat: { type: "json_object" } } : {}) }));
+    redirect("chat", (systemPrompt: unknown, userPrompt: unknown, temperature: unknown = 1) =>
+      engine.chat(String(systemPrompt ?? ""), String(userPrompt ?? ""), Number(temperature) || 1));
+    redirect("generate", (prompt: unknown, options: unknown = {}) =>
+      engine.generate(String(prompt ?? ""), options as LLMReasonOptions));
+    return () => {
+      for (const [name, original] of patched) prototype[name] = original;
+    };
+  } catch {
+    // vendor 不在（例如只跑单测）时静默：桥接是增强，不是启动前置
+    return () => undefined;
   }
 }

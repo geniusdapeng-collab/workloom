@@ -10,7 +10,6 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { Drawer, Textarea } from "@workloom/ui";
 import { ensureDemoLogin, trpc } from "../../../../lib/trpc";
 import { actionText } from "../../../../lib/display";
 import { BannerAlert, EventIdChip } from "../../../../components/hud";
@@ -64,7 +63,7 @@ const KIND_LABEL: Record<string, string> = {
 /** 围栏绑定徽章（G 系列章 · 金边） */
 function FenceMedal({ ruleId }: { ruleId: string }) {
   return (
-    <span className="rounded border border-gold/50 bg-gold/10 px-1.5 py-0.5 font-mono text-micro font-bold text-goldhi" title="已绑定围栏授权">
+    <span className="rounded border border-gold/50 bg-gold/10 px-1.5 py-0.5 font-mono text-micro font-bold text-goldhi" title="围栏绑定（声明即许可 F2.10）">
       🛡 {ruleId}
     </span>
   );
@@ -130,7 +129,7 @@ export function EmployeeCardDrawer({
         title, presetKey: agent.presetKey, runImmediately: false,
       }) as { kind: "clarify"; question: string } | { kind: "routed"; threadId: string };
       if (r.kind === "clarify") {
-        setBanner({ level: "warn", text: `意图不够明确，尚未创建任务：${r.question}` });
+        setBanner({ level: "warn", text: `意图含糊，未建任务（F3.2）：${r.question}` });
       } else {
         nav(`/p2/${encodeURIComponent(r.threadId)}`);
       }
@@ -155,8 +154,24 @@ export function EmployeeCardDrawer({
   const statusCls = agent.status === "invalid" ? "text-alert" : agent.online ? "text-holo" : "text-ink3";
 
   return (
-    <Drawer open title={`员工卡 · ${agent.name}`} description="五层活档案" onClose={onClose}>
-      <div className="flex flex-col gap-3">
+    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-label={`员工卡 · ${agent.name}`}>
+      {/* 背板（点击关闭） */}
+      <button type="button" aria-label="关闭员工卡" onClick={onClose} className="absolute inset-0 cursor-pointer bg-bg900/70 backdrop-blur-sm" />
+      <div className="relative flex h-full w-[460px] max-w-full flex-col overflow-y-auto border-l border-gline bg-bg800 shadow-[0_0_60px_rgba(0,0,0,.6)]">
+        {/* 头部 */}
+        <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-line bg-bg800/95 px-4 py-3 backdrop-blur">
+          <span className="text-[11px] tracking-[.2em] text-ink3">员工卡 · 五层活档案</span>
+          <span className="ml-auto text-micro text-ink3">数字员工档案</span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="cursor-pointer rounded border border-line px-2 py-0.5 text-caption text-ink3 hover:border-gline hover:text-ink2"
+          >
+            ✕ 关闭
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-3 p-4">
           {banner && (
             <BannerAlert level={banner.level} actionLabel="知道了" onAction={() => setBanner(null)}>{banner.text}</BannerAlert>
           )}
@@ -205,14 +220,14 @@ export function EmployeeCardDrawer({
                     title="前往视频技能运营"
                     className="flex w-full cursor-pointer items-center gap-2 rounded-lg border border-line bg-bg800/40 px-2.5 py-1.5 text-left text-caption hover:border-gline"
                   >
-                    <span className="min-w-0 flex-1 truncate text-ink2">🎒 {s.name} <span className="font-mono text-micro text-ink3">版本 {s.version}</span></span>
+                    <span className="min-w-0 flex-1 truncate text-ink2">🎒 {s.name} <span className="font-mono text-micro text-ink3">v{s.version}</span></span>
                     <span className={`shrink-0 text-micro ${s.installed ? "text-go" : "text-warn"}`}>{s.installed ? "已装备" : "未安装"}</span>
                   </button>
                 ))}
               </div>
             )}
             <div className="mt-2.5 border-t border-line/60 pt-2">
-              <div className="mb-1 text-micro text-ink3">围栏绑定 · 声明即许可</div>
+              <div className="mb-1 text-micro text-ink3">围栏绑定（G 系列章 · 声明即许可 F2.10）</div>
               {agent.fenceBindings.length === 0 ? (
                 <div className="text-caption text-warn">未声明围栏 · 系统级禁写</div>
               ) : (
@@ -281,7 +296,7 @@ export function EmployeeCardDrawer({
             <div className="mb-2 text-micro font-bold tracking-wider text-ink3">⑤ 记忆层</div>
             <div className="mb-2 text-caption text-ink2">
               被驳回样本 <b className={`font-orb ${agent.stats.rejected30 > 0 ? "text-warn" : "text-ink3"}`}>{agent.stats.rejected30}</b> 件 / 30 天
-              <span className="ml-1 text-micro text-ink3">（驳回原因将进入偏好校准）</span>
+              <span className="ml-1 text-micro text-ink3">（驳回原因进偏好模式 F1.7）</span>
             </div>
             {profile === null ? (
               <div className="text-caption text-ink3">校准记录加载中…</div>
@@ -333,12 +348,11 @@ export function EmployeeCardDrawer({
           </div>
           {composerOpen && canDispatch && (
             <div className="rounded-msg border border-gline bg-card p-3">
-              <Textarea
-                label="任务要求"
+              <textarea
                 value={goal}
                 onChange={(e) => setGoal(e.target.value)}
                 rows={2}
-                placeholder={`@${agent.name} 要做什么（信息不明确时会先向您确认）`}
+                placeholder={`@${agent.name} 要做什么（含糊将反问不建单 F3.2）`}
                 className="w-full rounded-lg border border-line bg-bg900 px-2.5 py-2 text-body text-ink outline-none placeholder:text-ink3 focus:border-gline"
               />
               <button
@@ -347,11 +361,12 @@ export function EmployeeCardDrawer({
                 onClick={() => void dispatch()}
                 className="mt-2 cursor-pointer rounded-lg gold-grad px-4 py-1.5 text-caption font-black text-ongold disabled:opacity-40"
               >
-                创建任务并前往任务页 →
+                建线程并跳 P2 任务页 →
               </button>
             </div>
           )}
+        </div>
       </div>
-    </Drawer>
+    </div>
   );
 }

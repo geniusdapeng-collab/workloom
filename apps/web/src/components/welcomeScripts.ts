@@ -27,12 +27,12 @@ export interface MateScript {
 
 /** S1 · 简短自我介绍（v1.2 定稿） */
 const INTRO =
-  "老板您好，我是织伴，您的 AI 小秘书。经营、团队和进度，我会随时替您盯着。";
+  "董事长您好，我是织伴，您的 AI 小秘书。经营、团队和进度，我会随时替您盯着。";
 
 /** S3 · 官方详细自我介绍（深入 + 通用，基座默认版） */
 const DETAIL: string[] = [
-  "您只要告诉我目标，我会找到合适岗位、跟进进度，并把真正需要您拍板的事整理好。",
-  "我会记住您的偏好，也守住权限：不替您拍板，不懂就明说。",
+  "您只要告诉我目标，我会找到合适岗位、跟进进度，并把真正需要您放行的事整理好。",
+  "我会记住您的偏好，也守住权限：不替您放行，不懂就明说。",
 ];
 
 /** S4 · 过渡引出团队（衔接现有 CEO 带队仪式） */
@@ -45,16 +45,14 @@ const BRIDGE: string[] = [
 /** 通用默认版（基座兜底） */
 const SYSTEM_DEFAULT: string[] = [
   "这是您的 AI 智能经营系统：日常工作由数字团队持续推进。",
-  "小事按规则自动完成；关键决策会带着依据请您拍板。",
-  "这里不是演示视频，派活、审批和数据都会真实流转。",
+  "小事按规则自动完成；关键关卡会带着依据请您放行。",
+  "这里不是演示视频，派活、关卡放行和数据都会真实流转。",
 ];
-const KEYWORDS_DEFAULT = ["全天候在岗", "规则内自动办", "大事您拍板", "过程可追溯"];
+const KEYWORDS_DEFAULT = ["全天候在岗", "规则内自动办", "关卡您放行", "过程可追溯"];
 
 export interface BundleWelcomeProjection {
   system: string[];
   keywords: string[];
-  /** 主弹窗行业场景卡（真实业务价值前置）；缺省回落基座通用机制卡。 */
-  cards?: Array<{ t: string; d: string }>;
 }
 
 function projectedChineseLines(value: unknown): string[] {
@@ -62,19 +60,6 @@ function projectedChineseLines(value: unknown): string[] {
   return value
     .map((line) => clientChineseText(line, ""))
     .filter((line) => line.length > 0);
-}
-
-/** 主弹窗场景卡投影：标题与正文都必须通过客户端中文校验，任一不合格即整组回落基座通用卡。 */
-export function welcomeCardsOf(projection?: BundleWelcomeProjection | null): Array<{ t: string; d: string }> | null {
-  if (!Array.isArray(projection?.cards)) return null;
-  const cards = projection.cards
-    .map((card) => ({
-      t: clientChineseText(card?.t, ""),
-      d: clientChineseText(card?.d, ""),
-    }))
-    .filter((card) => card.t.length > 0 && card.d.length > 0)
-    .slice(0, 4);
-  return cards.length > 0 ? cards : null;
 }
 
 /** 合并通用仪式文案与 Bundle 行业投影；基座不识别任何具体行业标识。 */

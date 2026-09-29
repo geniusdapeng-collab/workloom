@@ -5,9 +5,12 @@
  *  - 优先级队列：fuse（熔断，立即打断）> ask（请示）> ceremony（仪式）> ambient；
  *  - 降级：speechSynthesis 不可用/无语音 → available=false，仅走字幕（SubBus）。
  *  - 字幕事件总线（SubBus）：所有播报（含仅字幕模式）同步发字幕，新闻台字幕条消费。
+ *
+ * [VOICE-DEFAULT] 织伴默认音色=本机克隆音色（工位不可用时回落系统女声）
  */
 import { AudioEngine } from "../audio/AudioEngine";
 import { neuralVoiceAvailable, neuralVoiceConfig, playNeuralSpeech, probeNeuralVoice, wantsNeuralVoice } from "./neuralVoice";
+import { libraryVoiceFor } from "./voiceLibrary";
 
 export type VoicePriority = "fuse" | "ask" | "ceremony" | "ambient";
 export type VoiceGate = "ritual-only" | "all" | "captions";
@@ -53,20 +56,13 @@ interface QueuedUtterance {
 
 const DEFAULT_PRESET: VoiceProfile = { pitch: 1.0, rate: 0.96 };
 
-/** 行业无关的稳定音色 fallback；角色专属音色应由 Bundle 投影显式传入 voiceOverride。 */
+/**
+ * 角色 → 音色：走**音色库**（voiceLibrary.ts，单一事实源）。
+ * 角色专属音色仍可由 Bundle 投影显式传入 voiceOverride 覆盖（如织伴的萝莉档）。
+ */
 export function voiceProfileForRole(role: string): VoiceProfile {
   if (!role.trim()) return DEFAULT_PRESET;
-  let hash = 2166136261;
-  for (const ch of role) {
-    hash ^= ch.codePointAt(0) ?? 0;
-    hash = Math.imul(hash, 16777619);
-  }
-  const n = hash >>> 0;
-  return {
-    pitch: Number((0.9 + (n % 21) / 100).toFixed(2)),
-    rate: Number((0.92 + ((n >>> 5) % 13) / 100).toFixed(2)),
-    female: ((n >>> 9) & 1) === 1,
-  };
+  return libraryVoiceFor(role).profile;
 }
 
 // macOS / Windows 常见中文系统音色。这里只用于性别与稳定性排序，不依赖某台机器
@@ -80,11 +76,11 @@ const MALE_VOICE_RE = /male|eddy|reed|rocko|li[- ]?mu|yunxi|yunjian|yunyang|xiao
  * 实测（2026-09-18，macOS + Electron 44 真实壳）：这组音色在 zh-CN 下**能出声但不发
  * `onboundary` 事件**（同一句中文：它们 0 次 boundary，而 婷婷 15 次 / Li-Mu 13 次）。
  * 基座的口型同步链路正是靠 boundary 的 charIndex 驱动（MateLive2D / VoiceEngine.onLipSync），
- * 于是“看起来在说话、嘴却不动”。因此把它们降级为最后兜底：只有在没有任何正常中文音色时才用。
+ * 于是"看起来在说话、嘴却不动"。因此把它们降级为最后兜底：只有在没有任何正常中文音色时才用。
  */
 export const DEGRADED_VOICE_RE = /^(eddy|reed|flo|sandy|shelley|rocko|grandma|grandpa)\b/i;
 
-/** 把中文音色按“可用性”重排：正常音色在前，新奇音色垫底（保持原有 zh-CN 优先次序，稳定排序）。 */
+/** 把中文音色按"可用性"重排：正常音色在前，新奇音色垫底（保持原有 zh-CN 优先次序，稳定排序）。 */
 export function rankZhVoices<T extends { name: string }>(zh: readonly T[]): T[] {
   return [...zh].sort((a, b) => Number(DEGRADED_VOICE_RE.test(a.name)) - Number(DEGRADED_VOICE_RE.test(b.name)));
 }
@@ -102,13 +98,25 @@ export function selectVoice<T extends VoiceLike>(voices: readonly T[], profile: 
   if (zh.length === 0) return null;
   const ranked = rankZhVoices(zh);
   const usable = ranked.filter((v) => !DEGRADED_VOICE_RE.test(v.name));
-  const pool = usable.length > 0 ? usable : ranked;
+  const base = usable.length > 0 ? usable : ranked;
+  /**
+   * 性别硬约束（2026-09-20 真机反馈「织伴一会儿男声一会儿女声」的根治）：
+   * 声明 female 的角色绝不回落到男声——只要还有非男声候选就只用它们；
+   * 声明 male 的角色对称处理。池子清空（极简装机只装了单一性别音色）才退回原池。
+   */
+  const pool = profile.female === true
+    ? (base.some((v) => !MALE_VOICE_RE.test(v.name)) ? base.filter((v) => !MALE_VOICE_RE.test(v.name)) : base)
+    : profile.female === false
+      ? (base.some((v) => !FEMALE_VOICE_RE.test(v.name)) ? base.filter((v) => !FEMALE_VOICE_RE.test(v.name)) : base)
+      : base;
   const preferred = profile.preferredNames
     ?.map((name) => pool.find((v) => v.name.toLowerCase().includes(name.toLowerCase())))
     .find(Boolean);
-  const gendered = profile.female
+  const gendered = profile.female === true
     ? pool.find((v) => FEMALE_VOICE_RE.test(v.name))
-    : pool.find((v) => MALE_VOICE_RE.test(v.name));
+    : profile.female === false
+      ? pool.find((v) => MALE_VOICE_RE.test(v.name))
+      : undefined;
   return preferred ?? gendered ?? pool[0] ?? null;
 }
 
@@ -119,7 +127,7 @@ export class VoiceEngineImpl {
   private speaking = false;
 
   constructor() {
-    // 每页探测一次本机工位能力：探到了走克隆音色，探不到就走系统语音（探测本身不阻塞播报）
+    // 每页探测一次本机工位能力：探到了走克隆音色，探不到走系统语音（探测不阻塞播报）
     void probeNeuralVoice();
   }
   private active: QueuedUtterance | null = null;
@@ -140,7 +148,8 @@ export class VoiceEngineImpl {
   }
 
   get voiceDiagnostics(): Record<string, string> {
-    return Object.fromEntries([...this.voiceCache].map(([role, voice]) => [role, voice ? `${voice.name} (${voice.lang})` : "system-default-locked"]));
+    // 缓存键形如 `role|f`（性别档）；诊断只按角色名上报，保持既有口径可读
+    return Object.fromEntries([...this.voiceCache].map(([key, voice]) => [key.split("|")[0] ?? key, voice ? `${voice.name} (${voice.lang})` : "system-default-locked"]));
   }
 
   setGate(gate: VoiceGate): void {
@@ -161,7 +170,12 @@ export class VoiceEngineImpl {
   }
 
   private pickVoice(profile: VoiceProfile, role: string): SpeechSynthesisVoice | null {
-    if (this.voiceCache.has(role)) return this.voiceCache.get(role) ?? null;
+    /**
+     * 缓存键把角色与"性别档"绑在一起：同一角色不会因为先后拿到不同 profile
+     * （例如设置面板切档、或某处漏传 voiceOverride）而在段落之间换人。
+     */
+    const cacheKey = `${role}|${profile.female === true ? "f" : profile.female === false ? "m" : "n"}`;
+    if (this.voiceCache.has(cacheKey)) return this.voiceCache.get(cacheKey) ?? null;
     const voices = this.tts?.getVoices() ?? [];
     const zh = voices
       .filter((v) => /zh|cmn|chinese/i.test(`${v.lang} ${v.name}`))
@@ -169,9 +183,9 @@ export class VoiceEngineImpl {
     // 首次 voice 列表未就绪时也缓存 null：同一人物整场都使用系统默认声，
     // 不允许第二段突然换成另一位说话人。织伴在 2.4s 入场后才开口，正常机器
     // 此时列表已经可用；极端情况下宁可全程同一默认声，也不段落间变声。
-    if (zh.length === 0) { this.voiceCache.set(role, null); return null; }
+    if (zh.length === 0) { this.voiceCache.set(cacheKey, null); return null; }
     const chosen = selectVoice(voices, profile) as SpeechSynthesisVoice | null;
-    if (chosen) this.voiceCache.set(role, chosen);
+    if (chosen) this.voiceCache.set(cacheKey, chosen);
     return chosen;
   }
 
@@ -312,7 +326,6 @@ export class VoiceEngineImpl {
     this.speaking = false;
     if (this.queue.length > 0) void this.pump();
   }
-
   /** 播放本机克隆音色；口型由播放进度驱动（克隆音频没有 onboundary 事件）。 */
   private async speakNeural(u: Utterance, preset: VoiceProfile): Promise<boolean> {
     return await playNeuralSpeech(

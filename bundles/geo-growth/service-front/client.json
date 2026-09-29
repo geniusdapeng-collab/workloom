@@ -10,8 +10,8 @@
   "welcomeText": "您好，欢迎来到{brand}。我是获客服务助手{agent}，可以接待咨询、记录需求并同步真实跟进进度。",
   "quickReplies": [
     {
-      "label": "咨询酒店服务",
-      "sendText": "我想了解酒店服务和近期活动"
+      "label": "咨询增长服务",
+      "sendText": "我想了解获客增长服务和近期活动"
     },
     {
       "label": "提交合作需求",
@@ -63,15 +63,5 @@
     "messages",
     "me"
   ],
-  "supportPhone": "",
-  "demoHistory": [
-    {
-      "role": "user",
-      "text": "我从短视频看到你们，想了解适合亲子入住的房型。"
-    },
-    {
-      "role": "ai",
-      "text": "已记录您的亲子入住需求。提交前我会请您确认日期与人数；收到服务端工单编号后才会显示受理成功。"
-    }
-  ]
+  "supportPhone": ""
 }

@@ -4,8 +4,8 @@
  * 页面本身即走查工具——对照 PRD 状态规格表逐屏对账时逐格核验。
  */
 import type { ReactNode } from "react";
-import { Link } from "react-router";
 import { Icon } from "@workloom/ui";
+import { PageExitLink } from "../../shell/PageExitLink";
 import {
   AchievementBadge,
   AgentActionMessage,
@@ -55,11 +55,11 @@ function Section({ name, spec, children }: { name: string; spec: string; childre
 export default function DevMatrix() {
   return (
     <div data-wl-authorized-diagnostics="ui-component-matrix" className="space-y-2">
-      {/* /dev 是 bare 路由（不挂左侧主导航），页面必须自带可见返回出口。 */}
-      <Link to="/tasks" className="wl-button wl-button--secondary inline-flex w-fit">← 返回经营主页</Link>
       <p className="rounded border border-line bg-bg800 px-3 py-2 text-body text-ink2">
         仅限本地开发环境并显式开启诊断开关后使用；本页术语仅用于组件验收。
       </p>
+      {/* 裸页（/dev 不带左侧导航）：必须有本页出口，否则用户只能改地址栏离开 */}
+      <PageExitLink label="退出状态矩阵，返回工作台" />
       <div className="mb-4 flex items-baseline gap-3">
         <h2 className="text-h1 font-black tracking-wider">HUD 组件状态矩阵</h2>
         <span className="text-caption tracking-[.2em] text-ink3">/dev · DEV MATRIX · F2</span>
@@ -76,7 +76,7 @@ export default function DevMatrix() {
           <QuestCard eventId="E-8842" title="周五旺季调价" action="竞对采集中" done={2} total={3} status="running" />
         </Cell>
         <Cell label="review 待审查（琥珀呼吸）">
-          <QuestCard eventId="E-8843" title="差评应急回复" action="回复草稿待审批" done={2} total={3} status="review" />
+          <QuestCard eventId="E-8843" title="差评应急回复" action="回复草稿等待业务关卡放行" done={2} total={3} status="review" />
         </Cell>
         <Cell label="done 已完成 / queued 排队">
           <div className="space-y-2">
@@ -89,18 +89,18 @@ export default function DevMatrix() {
       </Section>
 
       <Section name="HandoffCard 昨夜日报卡" spec="§5.3 · 默认/空态（禁显 0）">
-        <Cell label="默认（三栏大数字强一致 F4.4）">
-          <HandoffCard data={{ deliveredAt: "08:30", fenceSnapshot: "hotel-baseline/v1", done: 12, pending: 2, needHuman: 1, credits: 46 }} />
+        <Cell label="默认（两栏大数字与 P3 强一致 F4.4）">
+          <HandoffCard data={{ deliveredAt: "08:30", fenceSnapshot: "hotel-baseline/v1", done: 12, needHuman: 1, credits: 46 }} />
         </Cell>
         <Cell label="空态（夜班未启用 → 整卡空态）">
           <HandoffCard nightEnabled={false} />
         </Cell>
       </Section>
 
-      <Section name="TriGestureBar 审批三操纵杆" spec="§5.4 · 默认/过期禁用/权限隐藏">
+      <Section name="TriGestureBar 关卡三操纵杆" spec="§5.4 · 默认/过期禁用/权限隐藏">
         <Cell label="默认三杆"><TriGestureBar /></Cell>
         <Cell label="expired 快照过期（E5.3 整组锁定+刷新）"><TriGestureBar expired /></Cell>
-        <Cell label="无审批权（整组隐藏非置灰 L5.1）">
+        <Cell label="无放行权（整组隐藏非置灰 L5.1）">
           <div className="text-caption text-ink3">下方渲染为 null（无置灰残影）：<TriGestureBar canApprove={false} />∅</div>
         </Cell>
       </Section>

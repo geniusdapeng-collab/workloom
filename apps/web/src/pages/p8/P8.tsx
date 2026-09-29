@@ -23,7 +23,8 @@ import { ensureDemoLogin, trpc } from "../../lib/trpc";
 import { displayNameOf, setAliasLocal } from "../../lib/naming";
 import { AgentAvatarOf } from "../../components/AgentAvatar";
 import { LoomBall, TONE_CLASS, emotionLabelOf, emotionOfAgent, emotionToneOf, loomBallEnabled } from "../../components/loomball";
-import { FENCE_LEVEL_TEXT, RULE_RESULT_TEXT, actionText, capabilityText, dictText, shortId, versionText } from "../../lib/display";
+import { FENCE_LEVEL_TEXT, RULE_RESULT_TEXT, actionText, capabilityText, dictText, shortId, skillDisplayName, versionText } from "../../lib/display";
+import { libraryVoiceFor } from "../../voice/voiceLibrary";
 import { Bridge } from "../../shell/Bridge";
 import { Button, Icon, Overlay, clientChineseText } from "@workloom/ui";
 import {
@@ -32,6 +33,7 @@ import {
   EventIdChip,
   LevelBadge,
   Skeleton,
+  XpBar,
 } from "../../components/hud";
 import { useNavigationAccess } from "../../shell/NavigationAccess";
 
@@ -48,7 +50,7 @@ interface AgentRow {
   readonly: boolean; status: string; invalidReason: string | null;
   fenceBindings: string[]; skills: string[];
   nightShift: boolean; highRisk: boolean; description: string; online: boolean;
-  /** 织球工作状态信号（服务端事件/审批只读投影，T-2026-0926-0001 公共化） */
+  /** 织球工作状态信号（服务端事件/审批只读投影，T-2026-0926-0019） */
   lastAction: string | null; lastActionAt: string | null;
   pendingApprovals: number; blockedRecent: number;
   stats: {
@@ -73,7 +75,7 @@ interface Profile {
   workspaceName: string; bundle: string;
   nightWindow: { open: boolean; range: string };
   fences: Array<{ ruleId: string; name?: string; level?: string; version?: string; isBaseline?: boolean; declared: boolean }>;
-  skills: Array<{ id: string; name: string; level: string; version: string; fence_bindings: string[]; installed: boolean }>;
+  skills: Array<{ id: string; name: string; description: string; level: string; version: string; fence_bindings: string[]; installed: boolean }>;
   stats: AgentRow["stats"];
   game: Game;
   events: Array<{
@@ -82,9 +84,9 @@ interface Profile {
   }>;
 }
 
-/** 角色口径（PRD P8 正文：经营者·审批人 / 只读成员 / 集团 Teams；F5.6 三端一致） */
+/** 角色口径（PRD P8 正文：经营者 / 只读成员 / 集团 Teams；F5.6 三端一致） */
 const ROLE_LABEL: Record<string, string> = {
-  owner: "经营者 · 审批人",
+  owner: "经营者",
   manager: "工作区管理员",
   staff: "工作区成员",
   readonly: "只读成员",
@@ -93,7 +95,7 @@ const ROLE_LABEL: Record<string, string> = {
 };
 const ROLE_SCOPE: Record<string, string> = {
   owner: "紧急制动 · 规则制定 · 成员任免",
-  manager: "跨店继承与审计 · 审批",
+  manager: "跨店继承与审计",
   readonly: "只读视图 · 无写入口",
   group: "集团视角",
   channel: "渠道接入",
@@ -133,7 +135,7 @@ function HumanCard({ h }: { h: HumanRow }) {
       <div className="mt-2 border-t border-line/60 pt-2 text-body leading-relaxed text-ink3">
         {ROLE_SCOPE[h.role] ?? ""}
         <div className="mt-1 flex gap-3">
-          <span>30 天审批 <b className="font-orb text-holo">{h.stats.decided30}</b></span>
+          <span>30 天决策 <b className="font-orb text-holo">{h.stats.decided30}</b></span>
           <span>派遣 <b className="font-orb text-holo">{h.stats.dispatched30}</b></span>
           <span>沉淀 <b className="font-orb text-holo">{h.stats.settled30}</b></span>
         </div>
@@ -188,7 +190,7 @@ function AgentCard({ a, canManage, onOpen }: { a: AgentRow; canManage: boolean; 
       <div className="flex items-start gap-2.5">
         {loomBallEnabled && (
           <div className="relative -ml-1 shrink-0 pt-0.5" title={`${displayName} · ${emotionText}`}>
-            <LoomBall emotion={emotion} size={40} live={ballLive} hoverActivate={!ballLive} followGaze={false} />
+            <LoomBall emotion={emotion} size={44} live={ballLive} hoverActivate={!ballLive} followGaze={false} />
           </div>
         )}
         <div className="relative shrink-0">
@@ -202,11 +204,6 @@ function AgentCard({ a, canManage, onOpen }: { a: AgentRow; canManage: boolean; 
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-body font-bold text-ink">
             <span className="min-w-0 break-words">{displayName}</span>
-            {/* 版本徽标从头像角落移入名称行：绝对定位在 40px 容器里会把「第 3.0 版」折成三行
-                （2026-09-23 实机走查：列表换行问题的一部分），移入正文后按需自然换行。 */}
-            <span className="shrink-0 rounded border border-line bg-bg900 px-1 font-mono text-body font-normal text-ink3">
-              {versionText(a.version)}
-            </span>
             {canManage && <button
               type="button"
               title="设置显示别名；岗位名称不会改变"
@@ -219,21 +216,22 @@ function AgentCard({ a, canManage, onOpen }: { a: AgentRow; canManage: boolean; 
           </div>
           <div className="break-words text-body text-ink3">
             {invalid
-              ? `校验失败：${clientChineseText(a.invalidReason, "安全规则绑定缺失")}`
+              ? `校验失败：${clientChineseText(a.invalidReason, "围栏绑定缺失")}`
               : a.readonly
                 ? "只读岗位 · 无写入工具"
                 : a.fenceBindings.length > 0
-                  ? `已关联 ${a.fenceBindings.length} 条安全规则`
-                  : "未声明安全规则 · 写操作已被系统阻断"}
+                  ? `已关联 ${a.fenceBindings.length} 条围栏`
+                  : "未声明围栏 · 写操作已被系统阻断"}
           </div>
         </div>
       </div>
       {!invalid && (
         <>
-          {/* 列表只回答三个问题：这是谁、现在什么状态、我能不能让他干活。
-              等级/段位、30 天动作与采纳率、安全规则明细统一进「员工档案」详情页，
-              避免卡片在窄列里换行成三四行（2026-09-23 走查：列表字段再瘦身）。 */}
-          <div className="mt-2.5 flex min-w-0 items-center justify-between gap-2">
+          <div className="mt-2.5 flex items-center justify-between">
+            <div>
+              <span className="font-orb text-body font-bold tracking-wider text-goldhi">等级 {a.game.level}</span>
+              <span className="ml-2 text-body text-holo">{a.game.rank}</span>
+            </div>
             {/* 状态 chip 与球同源（球 aria-hidden，语义只由这行文字承担） */}
             <span className="flex shrink-0 items-center gap-1.5">
               {a.readonly && <span className="text-body text-go">只读</span>}
@@ -241,22 +239,29 @@ function AgentCard({ a, canManage, onOpen }: { a: AgentRow; canManage: boolean; 
                 {emotionText}
               </span>
             </span>
-            {a.skills.length > 0 && (
-              <span className="inline-flex min-w-0 items-center gap-1 text-body text-ink3">
-                <Icon name="package" size={13} />
-                <span className="min-w-0 break-words">{a.skills.length} 个技能包</span>
-              </span>
-            )}
+          </div>
+          {/* 战绩条（游戏化展示层，手册 §3 界面叙事；XP=动作×2+积分，确定性推导） */}
+          <div className="mt-1.5">
+            <XpBar done={a.game.xp - a.game.xpFloor} total={a.game.xpNext - a.game.xpFloor} />
+          </div>
+          <div className="mt-2 flex items-center gap-1 overflow-hidden">
+            {a.fenceBindings.slice(0, 2).map((r, index) => <FenceBindingTag key={r} label={`关联围栏 ${index + 1}`} />)}
+            {a.skills.length > 0 && <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-body text-ink3"><Icon name="package" size={13} />{a.skills.length} 技能包</span>}
+          </div>
+          <div className="mt-2 flex gap-3 border-t border-line/60 pt-2 text-body text-ink3">
+            <span><b className="font-orb text-holo">{a.stats.actions30}</b> 动作</span>
+            <span>采纳 <b className="font-orb text-go">{pct(a.stats.adoptionRate)}</b></span>
+            <span className="ml-auto"><b className="font-orb text-gold">{a.stats.credits30.toLocaleString()}</b> 币</span>
           </div>
         </>
       )}
       {invalid && (
         <div className="mt-2.5 rounded-md border border-alert/40 bg-alert/8 px-2.5 py-1.5 text-body text-alert">
-          岗位配置校验失败 → 写操作已被阻断，请修复安全规则绑定后重新装配
+          岗位配置校验失败 → 写操作已被阻断，请修复围栏绑定后重新装配
         </div>
       )}
       <div className="mt-3 flex justify-end">
-        <Button variant="quiet" onClick={() => onOpen(a.id)}>查看档案 →</Button>
+        <Button variant="quiet" onClick={() => onOpen(a.id)}>查看成员档案</Button>
       </div>
       <Overlay
         open={canManage && aliasOpen}
@@ -319,10 +324,7 @@ function RosterHome() {
   const left = (
     <>
       <div className="mb-2 px-1 text-body tracking-[.2em] text-ink3">团队概览</div>
-      <div className="mb-1.5 rounded-lg border border-line bg-card px-3 py-2.5">
-        <div className="text-body font-bold text-ink">人类成员 · {humans.length}</div>
-        <div className="mt-0.5 text-body text-ink3">{humans.filter((h) => h.online).length} 人在线（近 24h 留痕）</div>
-      </div>
+      {/* 人类成员块：2026-09-20 产品决定删除（本页聚焦数字员工编制；人类账号在服务端仍存在） */}
       <div className="mb-1.5 rounded-lg border border-line bg-card px-3 py-2.5">
         <div className="text-body font-bold text-ink">数字员工 · {agents.length} 个岗位</div>
         <div className="mt-0.5 text-body text-ink3">
@@ -342,15 +344,15 @@ function RosterHome() {
       <div className="space-y-2">
         <div className="rounded-lg border border-line bg-card p-3 text-body leading-relaxed text-ink2">
           <b className="text-holo">数字员工是正式组织成员</b>
-          <div className="mt-1 text-ink3">每位数字员工都有可追溯身份、版本、技能、安全规则授权与工作记录，与人类成员使用同一套协作协议。</div>
+          <div className="mt-1 text-ink3">每位数字员工都有可追溯身份、版本、技能、围栏授权与工作记录，与人类成员使用同一套协作协议。</div>
         </div>
         <div className="rounded-lg border border-line bg-card p-3 text-body leading-relaxed text-ink2">
-          <b className="text-holo">未声明关联安全规则时禁止写入</b>
+          <b className="text-holo">未声明关联围栏时禁止写入</b>
           <div className="mt-1 text-ink3">系统级约束，无后门；加载时强制校验，失败卡片标红。</div>
         </div>
         <div className="rounded-lg border border-line bg-card p-3 text-body leading-relaxed text-ink2">
           <b className="text-holo">三端权限保持一致</b>
-          <div className="mt-1 text-ink3">权限变更必须审批并留痕；无权使用的入口不会显示。</div>
+          <div className="mt-1 text-ink3">权限变更必须留痕；无权使用的入口不会显示。</div>
         </div>
       </div>
     </>
@@ -379,21 +381,16 @@ function RosterHome() {
           <EmptyState
             icon={<Icon name="team" size={24} />}
             title="新工作区暂无成员卡片"
-            hint="去「行业方案」装上适合你业务的员工包，团队成员就会出现在这里。"
+            hint="从装配中心启用行业官方员工包后，成员会显示在这里。"
             actionLabel={canManage ? "加装成员岗位" : undefined}
             onAction={canManage ? () => nav("/assembly") : undefined}
           />
         ) : (
           <>
-            <div className="mb-2 text-body tracking-[.2em] text-ink3">人类成员 · {humans.length}</div>
-            <div className="mb-5 grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,190px),1fr))]">
-              {humans.map((h) => <HumanCard key={h.memberNo} h={h} />)}
-            </div>
-
             <div className="mb-2 text-body tracking-[.2em] text-ink3">
               数字员工 · {agents.length} 个岗位 · 夜班岗位在 {data?.nightWindow.range} 自动上线
             </div>
-            <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr))]">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
               {agents.map((a) => <AgentCard key={a.id} a={a} canManage={canManage} onOpen={(id) => nav(`/agents/${encodeURIComponent(id)}`)} />)}
             </div>
 
@@ -407,7 +404,7 @@ function RosterHome() {
                 >
                   <span className="inline-flex items-center gap-1"><Icon name="partner" size={15} aria-hidden="true" />加装数字员工岗位</span>
                 </button>
-                <span className="text-body text-ink3">没绑定规则的数字员工只能看不能动——它的任何改动操作都会被系统拦下。</span>
+                <span className="text-body text-ink3">未声明关联围栏的数字员工，其写操作会被系统阻断。</span>
               </div>
             )}
           </>
@@ -486,7 +483,6 @@ function AgentProfilePage({ agentId }: { agentId: string }) {
             {displayNameOf({ presetKey: a.presetKey, roleName: a.name }).slice(0, 1)}
           </span>
           <span className="min-w-0 flex-1 break-words text-body text-ink2">{displayNameOf({ presetKey: a.presetKey, roleName: a.name })}</span>
-          <span className="text-body text-ink3">{versionText(a.version)}</span>
         </button>
       ))}
       <button
@@ -519,7 +515,7 @@ function AgentProfilePage({ agentId }: { agentId: string }) {
               {p.agent.writeBack.map((w) => <div key={w}>{capabilityText(w)}</div>)}
             </div>
           )}
-          <div className="mt-1.5 text-ink3">未声明关联安全规则时，写操作会被系统阻断。</div>
+          <div className="mt-1.5 text-ink3">未声明关联围栏时，写操作会被系统阻断。</div>
         </div>
       </div>
     </>
@@ -534,25 +530,17 @@ function AgentProfilePage({ agentId }: { agentId: string }) {
           <EmptyState icon={<Icon name="agents" size={24} />} title="成员不存在或已停用" hint="返回团队成员选择其他成员" actionLabel="← 返回团队成员" onAction={() => nav("/agents")} />
         ) : (
           <>
-            <div className="mb-3">
-              <div className="flex flex-wrap items-baseline gap-3">
-                <h2 className="text-h1 font-black tracking-wider">
-                  员工档案 · {displayNameOf({ presetKey: p.agent.presetKey, roleName: p.agent.name })}
-                  <span className="ml-2 text-body font-normal text-holo">{versionText(p.agent.version)}</span>
-                </h2>
-                <span className="text-body tracking-[.2em] text-ink3">岗位职责、权限与工作记录</span>
-              </div>
-              {p.agent.description && (
-                <p className="mt-1.5 max-w-4xl break-words text-body leading-relaxed text-ink2">
-                  {clientChineseText(p.agent.description, "岗位职责详见行业方案")}
-                </p>
-              )}
+            <div className="mb-3 flex flex-wrap items-baseline gap-3">
+              <h2 className="text-h1 font-black tracking-wider">
+                成员档案 · {displayNameOf({ presetKey: p.agent.presetKey, roleName: p.agent.name })}
+              </h2>
+              <span className="text-body tracking-[.2em] text-ink3">身份、能力、权限与工作记录</span>
             </div>
 
             {p.agent.status === "invalid" && (
               <div className="mb-3">
                 <BannerAlert level="alert">
-                  岗位配置校验失败：{clientChineseText(p.agent.invalidReason, "安全规则绑定缺失")}。写操作已被系统阻断，请修复后重新装配。
+                  岗位配置校验失败：{clientChineseText(p.agent.invalidReason, "围栏绑定缺失")}。写操作已被系统阻断，请修复后重新装配。
                 </BannerAlert>
               </div>
             )}
@@ -562,37 +550,48 @@ function AgentProfilePage({ agentId }: { agentId: string }) {
               </div>
             )}
 
-            {/* 上排三卡：身份与归属 / 规则许可 / 技能包 */}
-            <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr))]">
+            {/* 上排三卡：身份与归属 / 规则许可 / 技能包
+                2026-09-20 排版修复：三列在带左右栏的 B 端壳里过窄，围栏名被挤成竖排单字；
+                改为最多两列 + 围栏逐条块状布局（名称一行、规则号/版本一行、状态右侧对齐）。 */}
+            <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
               <div className="rounded-msg border border-line bg-card p-3.5">
                 <div className="mb-2 text-body font-bold text-holo">身份与归属</div>
                 <div className="space-y-1.5 text-body">
                   <div className="flex justify-between gap-3"><span className="text-ink3">员工编号</span><span className="font-mono text-holo">{shortId(p.agent.id)}</span></div>
                   <div className="flex justify-between gap-3"><span className="text-ink3">运行版本</span><span className="text-ink2">{versionText(p.agent.version)}</span></div>
+                  {/* 音色（2026-09-20）：来自音色库 voice/voiceLibrary.ts，按岗位标识稳定散列 ——
+                      同一员工全场同一嗓音；性别是硬约束，女声岗位不会掉到男声。 */}
+                  <div className="flex justify-between gap-3"><span className="text-ink3">音色</span><span className="text-ink2">{libraryVoiceFor(p.agent.presetKey).label}</span></div>
                   <div className="flex justify-between"><span className="text-ink3">工作区</span><span className="text-ink2">{p.workspaceName}</span></div>
-                  <div className="flex justify-between gap-3"><span className="text-ink3">来源行业包</span><span className="text-ink2">{clientChineseText(p.bundle, "当前行业包")}</span></div>
-                  <div className="flex justify-between"><span className="text-ink3">排班</span><span className="text-ink2">{p.agent.nightShift ? "夜班中心 · 夜班窗口自动上线" : "日常班组"}</span></div>
+                  <div className="flex justify-between gap-3"><span className="text-ink3">来源行业包</span><span className="text-ink2">{clientChineseText(p.bundle, p.bundle)}</span></div>
+                  <div className="flex justify-between"><span className="text-ink3">战队</span><span className="text-ink2">{p.agent.nightShift ? "夜班中心 · 夜班窗口自动上线" : "日常班组"}</span></div>
                 </div>
                 <div className="mt-2.5 border-t border-line/60 pt-2">
-                  <LevelBadge level={p.game.level} rank={p.game.rank} name={displayNameOf({ presetKey: p.agent.presetKey, roleName: p.agent.name })} version={p.agent.version} />
+                  <LevelBadge level={p.game.level} rank={p.game.rank} name={displayNameOf({ presetKey: p.agent.presetKey, roleName: p.agent.name })} />
                 </div>
               </div>
 
               <div className="rounded-msg border border-line bg-card p-3.5">
-                <div className="mb-2 text-body font-bold text-holo">规则许可 · 安全规则授权</div>
+                <div className="mb-2 text-body font-bold text-holo">规则许可 · 围栏授权</div>
                 {p.fences.length === 0 ? (
-                  <div className="text-body text-ink3">未声明关联安全规则——写操作已被系统阻断，仅允许只读动作。</div>
+                  <div className="text-body text-ink3">未声明关联围栏——写操作已被系统阻断，仅允许只读动作。</div>
                 ) : (
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     {p.fences.map((f) => (
-                      <div key={f.ruleId} className="flex items-center gap-2 text-body">
-                        <FenceBindingTag label={clientChineseText(f.name, "关联安全规则")} />
-                        <span className="min-w-0 flex-1 break-words text-ink2">
-                          {f.declared ? `${clientChineseText(f.name, "关联安全规则")} ${versionText(f.version)}` : "声明悬空：规则不存在"}
-                        </span>
-                        <span className={`inline-flex shrink-0 items-center gap-1 text-body ${f.declared ? "text-go" : "text-alert"}`}>
-                          {f.declared ? <>{f.isBaseline && <Icon name="lock" size={13} />}已声明 · {dictText(FENCE_LEVEL_TEXT, f.level)}</> : <><Icon name="error" size={13} />标红</>}
-                        </span>
+                      <div key={f.ruleId} className="rounded-lg border border-line bg-bg800/40 px-2.5 py-2 text-body">
+                        <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+                          <span className="min-w-0 flex-1 break-words text-ink2">{clientChineseText(f.name, "关联围栏")}</span>
+                          <span className={`inline-flex shrink-0 items-center gap-1 ${f.declared ? "text-go" : "text-alert"}`}>
+                            {f.declared
+                              ? <>{f.isBaseline && <Icon name="lock" size={13} />}已声明 · {dictText(FENCE_LEVEL_TEXT, f.level)}</>
+                              : <><Icon name="error" size={13} />声明悬空</>}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          {/* 规则内部编号不进客户端（客户端文案边界）；标签只表达来源与基线语义 */}
+                          <FenceBindingTag label={f.declared ? (f.isBaseline ? "基线围栏" : "关联围栏") : "规则不存在"} />
+                          <span className="text-ink3">{f.declared ? versionText(f.version) : "声明悬空：规则不存在"}</span>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -611,11 +610,11 @@ function AgentProfilePage({ agentId }: { agentId: string }) {
                         type="button"
                         onClick={() => nav("/skills")}
                         title="前往技能中心"
-                        className="flex w-full min-w-0 cursor-pointer flex-wrap items-center gap-2 rounded-lg border border-line bg-bg800/40 px-2.5 py-1.5 text-left text-body hover:border-gline"
+                        className="flex w-full min-w-0 cursor-pointer flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg border border-line bg-bg800/40 px-2.5 py-1.5 text-left text-body hover:border-gline"
                       >
-                        <span className="flex min-w-0 flex-1 items-center gap-1 break-words text-ink2"><Icon name="package" size={13} className="shrink-0" /> {clientChineseText(s.name, "技能能力")} <span className="text-body text-ink3">{versionText(s.version)}</span></span>
+                        <span className="flex min-w-0 flex-1 items-center gap-1 break-words text-ink2"><Icon name="package" size={13} className="shrink-0" /> {skillDisplayName(s.name, s.description)}</span>
                         <span className={`shrink-0 text-body ${s.installed ? "text-go" : "text-warn"}`}>
-                          {s.installed ? `已装备 · ${s.fence_bindings.length} 条关联安全规则` : "未安装"}
+                          {s.installed ? `已装备 · ${s.fence_bindings.length} 条关联围栏` : "未安装"}
                         </span>
                       </button>
                     ))}
@@ -628,7 +627,7 @@ function AgentProfilePage({ agentId }: { agentId: string }) {
             <div className="mt-3.5 grid grid-cols-1 gap-3.5 xl:grid-cols-[1.2fr_1fr]">
               <div className="rounded-msg border border-line bg-card p-3.5">
                 <div className="mb-2 text-body font-bold text-holo">30 天战绩（来自事件账本）</div>
-                <div className="grid gap-2.5 [grid-template-columns:repeat(auto-fill,minmax(min(100%,120px),1fr))]">
+                <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
                   {[
                     ["动作", String(p.stats.actions30), ""],
                     ["采纳率", pct(p.stats.adoptionRate), ""],

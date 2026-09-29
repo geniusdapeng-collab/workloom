@@ -4,31 +4,36 @@
  * 界面三要素：形象（数字CEO全息CEO+员工员工状态）/ 实况（语音气泡+请示卡+实况字幕）/ 聊天框。
  * 设计原则：剧场负责「感觉」，工作台（/p1…）负责「操作」；全部状态来自真实事件（captain.theater 5s 心跳）。
  * 形象纯 SVG+CSS+Canvas 零素材；仪式：每日首访晨间播报（光核→光环→卫星逐亮→报到词）。
+ * 2026-09-21 产品所有者口径（本机单人运行）：基座通用审批环节已移除——本页不再展示「请您决策」
+ * 请示卡，员工状态卡不再提供批准/驳回手势；业务链路自带的关卡（如视频管线 G1–G10、定妆照确认）
+ * 由各自业务页面就地放行。
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ensureDemoLogin, trpc } from "../../lib/trpc";
-import { RejectDialog } from "../../components/RejectDialog";
+import { ensureDemoLogin, isLocalFull, trpc } from "../../lib/trpc";
 import { CommandCard } from "../../components/CommandCard";
-import { actionText, actorText, floorStatusText, payloadText } from "../../lib/display";
+import { actionText, actorText } from "../../lib/display";
 import { SimBanner } from "../../components/SimBanner";
 import { SkillDistBanner } from "../../components/SkillDistBanner";
 import { FloorView, type FloorPayload, type FloorAgent } from "./Floor";
 import { Stage3D } from "../../components/Stage3D";
 import { Floor3D } from "../../components/Floor3D";
-import { SubtitleBar } from "../../voice/SubtitleBar";
 import { WelcomeCeremony } from "../../components/WelcomeCeremony";
 import type { CeremonyActor } from "../../components/CeremonyStage";
 import { VoiceEngine } from "../../voice/VoiceEngine";
 import { AudioEngine } from "../../audio/AudioEngine";
 import { useAmbience } from "../../audio/ambience";
-import { AudioSettings } from "../../components/AudioSettings";
 import { ValueCounters } from "../../components/ValueCounters";
+import { QuestlineHud } from "../../components/mate-guide/QuestlineHud";
+import { QuestlineOverlay } from "../../components/mate-guide/QuestlineOverlay";
+import { useQuestline } from "../../onboarding/useQuestline";
+import { EMPTY_FACTS, factsFromRecentActions, type QuestFacts } from "../../onboarding/questline";
+import { questlineForBundle } from "../../onboarding/questline.config";
+import { QuestlineContentProvider } from "../../onboarding/QuestlineContent";
 import { useTheaterDiff } from "../../lib/theaterDiff";
 import { displayNameOf, hydrateAliases, reportTitleOf, selectReporters } from "../../lib/naming";
-import { Link } from "react-router";
+import { useNavigate } from "react-router";
 import { useNavigationAccess } from "../../shell/NavigationAccess";
-import { IndustrySlot } from "../../shell/IndustrySlots";
-import { Button, Icon, Overlay, clientChineseText } from "@workloom/ui";
+import { clientChineseText } from "@workloom/ui";
 
 /* ================= 类型 ================= */
 interface Satellite { id: string; presetKey: string; name: string; alias?: string | null; grade: string }
@@ -40,11 +45,6 @@ interface Theater {
   satellites: Satellite[];
   ticker: TickerItem[];
   floor?: FloorPayload | null;
-}
-interface ChairmanItem {
-  approval_id: string; event_id: string;
-  snapshot: { action?: string; params?: Record<string, unknown>; ceo_rationale?: string; title?: string; summary?: string };
-  payload: { decision: { action: string } };
 }
 interface WelcomeState {
   status: "not_started" | "in_progress" | "paused" | "completed";
@@ -178,29 +178,11 @@ function Satellites({ agents, onPick }: { agents: Satellite[]; onPick: (a: Satel
   );
 }
 
-/* ================= 打字机气泡 ================= */
-function TypeBubble({ text, tone }: { text: string; tone: string }) {
-  const [n, setN] = useState(0);
-  useEffect(() => { setN(0); }, [text]);
-  useEffect(() => {
-    if (n >= text.length) return;
-    const id = setTimeout(() => setN((x) => x + 1), 18);
-    return () => clearTimeout(id);
-  }, [n, text]);
-  return (
-    <div className={`rounded-xl border bg-card/90 p-3 text-sm leading-relaxed backdrop-blur ${tone === "amber" ? "border-amber-400/50" : "border-gline"}`}>
-      <span className="text-ink">{text.slice(0, n)}</span>
-      {n < text.length && <span className="animate-pulse text-gold">▌</span>}
-    </div>
-  );
-}
-
 /* ================= 主组件 ================= */
 export default function P0() {
-  const { bundle, entries, canAction } = useNavigationAccess();
+  const { bundle, entries, canAction, subject } = useNavigationAccess();
+  const navigate = useNavigate();
   const canDispatch = canAction("task.dispatch");
-  const canApprove = canAction("approval.decide");
-  const canReadApprovals = entries.some((entry) => entry.route === "/approvals");
   const [wsName, setWsName] = useState("WorkLoom");
   const [showWelcome, setShowWelcome] = useState(false);
   const [welcome, setWelcome] = useState<WelcomeState | null>(null);
@@ -209,18 +191,6 @@ export default function P0() {
     window.dispatchEvent(new CustomEvent<boolean>("workloom:welcome", { detail: visible }));
     setShowWelcome(visible);
   };
-  const taskCards = useMemo(() => {
-    const widget = bundle?.ui.home.widgets.find((candidate) => (
-      candidate.component === "QuickTaskList" && candidate.clients.includes("pc")
-    ));
-    const configured = Array.isArray(widget?.props.tasks)
-      ? widget.props.tasks
-        .map((task) => clientChineseText(task, ""))
-        .filter((task) => task.length > 0)
-        .slice(0, 8)
-      : [];
-    return configured.length ? configured : BASE_TASK_CARDS;
-  }, [bundle]);
   useEffect(() => {
     void ensureDemoLogin().then(async () => {
       await Promise.all([
@@ -238,17 +208,99 @@ export default function P0() {
     });
   }, []);
   const [data, setData] = useState<Theater | null>(null);
-  const [queue, setQueue] = useState<ChairmanItem[]>([]);
+
+  /**
+   * 职场视图分批（2026-09-20 密度重设计）：
+   *  - 排序：有请托/异常/汇报/协作/在跑任务的员工优先，其次待命，最后停用工位；
+   *  - 分批：每批 18 人（3×6 站位舒适密度），第 1 批天然是"活跃置顶"；
+   *  - 自动轮播：每 12 秒换一批，可暂停/手动换批（人数 ≤ 每批上限时不轮播）。
+   */
+  const FLOOR_BATCH_SIZE = 18;
+  const [waveIndex, setWaveIndex] = useState(0);
+  const floorAgentsAll = useMemo(() => data?.floor?.agents ?? [], [data]);
+  const sortedFloorAgents = useMemo(() => {
+    const rank: Record<string, number> = { asking: 0, blocked: 1, celebrating: 2, collab: 3, working: 4, idle: 5, disabled: 6 };
+    return [...floorAgentsAll].sort(
+      (a, b) => (rank[a.state] ?? 9) - (rank[b.state] ?? 9) || a.id.localeCompare(b.id),
+    );
+  }, [floorAgentsAll]);
+  const floorWaves = useMemo(() => {
+    const waves: FloorAgent[][] = [];
+    for (let i = 0; i < sortedFloorAgents.length; i += FLOOR_BATCH_SIZE) {
+      waves.push(sortedFloorAgents.slice(i, i + FLOOR_BATCH_SIZE));
+    }
+    return waves.length ? waves : [[]];
+  }, [sortedFloorAgents]);
+  const visibleFloorAgents = floorWaves[Math.min(waveIndex, floorWaves.length - 1)] ?? [];
+  useEffect(() => { setWaveIndex((i) => (i >= floorWaves.length ? 0 : i)); }, [floorWaves.length]);
+  useEffect(() => {
+    if (floorWaves.length <= 1) return;
+    const timer = window.setInterval(() => setWaveIndex((i) => (i + 1) % floorWaves.length), 12_000);
+    return () => window.clearInterval(timer);
+  }, [floorWaves.length]);
+  /* ---- 首日上岗（织伴 · 首席增长官带玩）：进度本地持久化，关卡推进只认客户操作与真实事实 ---- */
+  const [questFacts, setQuestFacts] = useState<QuestFacts>(EMPTY_FACTS);
+  const [serverXp, setServerXp] = useState<number | null>(null);
+  const memberNo = subject?.memberNo ?? null;
+  // S3：跨页面事实由剧场 ticker（近 14 条真实事件）推导——
+  // 3D 职场拖拽派活、AskRail 派活都能被认出来，而不是只认引导层里的动作。
+  const tickerFacts = useMemo(
+    () => factsFromRecentActions(
+      (data?.ticker ?? []).map((item) => ({ action: item.action, who: item.who })),
+      memberNo,
+    ),
+    [data?.ticker, memberNo],
+  );
+  const questlineFacts = useMemo<QuestFacts>(
+    () => ({
+      ...questFacts,
+      dispatched: questFacts.dispatched || tickerFacts.dispatched,
+      decided: questFacts.decided || tickerFacts.decided,
+    }),
+    [questFacts, tickerFacts],
+  );
+  // 欢迎仪式走完才算"起跑线"；中途暂停欢迎的客户仍可从左下角手动开始
+  const questlineReady = Boolean(!showWelcome && welcome && welcome.status === "completed");
+  // 内容包随当前活动 Bundle 切换（酒店/GEO/短视频各一套）；解析不到就不显示引导，
+  // 宁可不引导，也不能把别的行业的岗位与人设塞给客户。
+  const questlineContent = useMemo(() => questlineForBundle(bundleId), [bundleId]);
+  const questline = useQuestline({
+    ready: questlineReady && questlineContent !== null,
+    facts: questlineFacts,
+    ...(questlineContent ? { content: questlineContent } : {}),
+  });
+  // M1：等级/XP 以团队页同源（roster 30 天事件投影）为准，避免同一屏出现两个"董事长等级"
+  useEffect(() => {
+    if (!questlineReady || !memberNo) return;
+    let stopped = false;
+    const loadXp = async () => {
+      try {
+        await ensureDemoLogin();
+        const roster = await trpc.roster.list.query() as { humans?: Array<{ memberNo: string; game?: { xp?: number } }> };
+        if (stopped) return;
+        const mine = (roster.humans ?? []).find((h) => h.memberNo === memberNo);
+        if (mine?.game && typeof mine.game.xp === "number") setServerXp(mine.game.xp);
+      } catch {
+        /* 取不到就不显示累计口径，退回本次会话 XP */
+      }
+    };
+    void loadXp();
+    const timer = window.setInterval(() => void loadXp(), 60_000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [questlineReady, memberNo]);
+  const markQuestFact = (key: keyof QuestFacts, value: boolean) => {
+    setQuestFacts((current) => (current[key] === value ? current : { ...current, [key]: value }));
+  };
   const [pick, setPick] = useState<Satellite | null>(null);
-  const [input, setInput] = useState("");
-  const [chat, setChat] = useState<Array<{ from: "me" | "ceo"; text: string }>>([]);
-  const [busy, setBusy] = useState(false);
   const [ceremony, setCeremony] = useState(0); // 0=未演 1-4=晨间播报阶段 5=完成
   const [msg, setMsg] = useState("");
   // D25 视图：floor=数字办公区（默认） / stage=剧场舞台（D23）
   const [view, setView] = useState<"floor" | "stage">(() =>
     (typeof localStorage !== "undefined" && localStorage.getItem("theater-view") === "stage") ? "stage" : "floor");
-  const [askPick, setAskPick] = useState<FloorAgent | null>(null); // 职场请示卡弹层
   // WebGL 可用性探测：不可用（远程桌面/老驱动/虚拟机）时 3D 舞台自动降级为 SVG 卫星视图
   const webglOk = useMemo(() => {
     try {
@@ -256,7 +308,6 @@ export default function P0() {
       return !!(c.getContext("webgl2") ?? c.getContext("webgl"));
     } catch { return false; }
   }, []);
-  const [rejectTarget, setRejectTarget] = useState<string | null>(null); // M1.2 驳回弹窗目标
   const switchView = (v: "floor" | "stage") => { setView(v); localStorage.setItem("theater-view", v); };
   // —— M1 视听觉醒：事件源 / 环境声 / 手势启动 ——
   const directorEvent = useTheaterDiff(data);
@@ -302,29 +353,13 @@ export default function P0() {
 
   const load = async () => {
     await ensureDemoLogin();
-    const [t, q] = await Promise.all([
-      trpc.captain.theater.query() as Promise<Theater>,
-      canReadApprovals ? trpc.captain.chairmanQueue.query() as Promise<ChairmanItem[]> : Promise.resolve([]),
-    ]);
+    const t = await trpc.captain.theater.query() as Theater;
     setData({
       ...t,
       latestBriefing: t.latestBriefing
         ? { ...t.latestBriefing, text: clientChineseText(t.latestBriefing.text, BRIEFING_FALLBACK) }
         : null,
     });
-    setQueue(q.map((item) => ({
-      ...item,
-      snapshot: {
-        ...item.snapshot,
-        title: clientChineseText(
-          item.snapshot.title,
-          actionText(item.snapshot.action ?? item.payload.decision.action),
-        ),
-        ceo_rationale: item.snapshot.ceo_rationale === undefined
-          ? undefined
-          : clientChineseText(item.snapshot.ceo_rationale, "负责人意见待确认"),
-      },
-    })));
     hydrateAliases(t.satellites.map((a) => ({ presetKey: a.presetKey, alias: a.alias })));
   };
   const saveWelcome = async (
@@ -339,16 +374,6 @@ export default function P0() {
       setTimeout(() => setMsg(""), 3500);
     } finally {
       if (status === "paused" || status === "completed") setWelcomeVisible(false);
-    }
-  };
-  const replayWelcome = async () => {
-    try {
-      const result = await trpc.onboarding.replayWelcome.mutate() as Omit<WelcomeState, "role">;
-      setWelcome((current) => ({ ...result, role: current?.role ?? "staff" }));
-      setWelcomeVisible(true);
-    } catch {
-      setMsg("欢迎引导暂时无法重播，请稍后重试。");
-      setTimeout(() => setMsg(""), 3500);
     }
   };
   useEffect(() => {
@@ -367,87 +392,12 @@ export default function P0() {
     seq.forEach((ms, i) => setTimeout(() => setCeremony(i + 2), ms));
   }, []);
 
-  const l4 = data?.pendingByTier.l4_chairman ?? 0;
   const tone = useMemo(() => {
     if (!data) return "grey" as const;
     if (data.mode === "disabled") return "grey" as const;
-    if (l4 > 0) return "amber" as const;
     if (data.mode === "trial" || data.mode === "active") return "gold" as const;
     return "holo" as const;
-  }, [data, l4]);
-
-  const speech = useMemo(() => {
-    if (!data) return "系统接入中……";
-    if (data.latestBriefing?.text) {
-      const lines = clientChineseText(data.latestBriefing.text, BRIEFING_FALLBACK).split("\n");
-      return lines.slice(0, 3).join(" ");
-    }
-    if (data.mode === "disabled") return "老板，我还未获授权。到「老板视图」完成深度授权后，我就开始为您工作。";
-    return "团队待命。您可以直接对我下指令，或等我按节拍向您汇报。";
   }, [data]);
-
-  const send = async (text: string) => {
-    if (!canDispatch || !text.trim() || busy) return;
-    setBusy(true);
-    setChat((c) => [...c, { from: "me", text }]);
-    setInput("");
-    try {
-      const r = await trpc.threads.dispatch.mutate({ title: text }) as Record<string, unknown>;
-      let reply = "";
-      if (r.kind === "clarify") reply = clientChineseText(r.question, "能再说得具体一点吗？");
-      else if (r.mode === "ask") reply = clientChineseText(r.answer, "应答内容暂时无法显示，请稍后再试。");
-      else if (r.mode === "agent") reply = "收到。我会逐步推进，每一步都先请您确认再动手。";
-      else reply = "收到，已立项执行。进展我会主动汇报。";
-      setChat((c) => [...c, { from: "ceo", text: reply }]);
-    } catch (e) {
-      setChat((c) => [...c, { from: "ceo", text: safeInteractionError(e, "指令暂时未送达，请稍后重试。") }]);
-    } finally { setBusy(false); }
-  };
-
-  const decide = async (approvalId: string, gesture: "approve" | "reject") => {
-    if (!canApprove) return;
-    AudioEngine.play(gesture === "approve" ? "approve" : "reject");
-    if (gesture === "reject") {
-      // M1.2（D24）：驳回必须选择行业受控枚举（弹窗），原「无原因驳回」已被服务端 L5.2 拒绝
-      setRejectTarget(approvalId);
-      return;
-    }
-    await trpc.approvals.decide.mutate({ approvalId, gesture });
-    setMsg(`已批准，全链留痕`);
-    setAskPick(null);
-    setTimeout(() => setMsg(""), 3000);
-    await load();
-  };
-  /** 拖拽任务卡到员工身上（派活闭环·拖拽形态：落点即下达，与指挥卡同通道） */
-  const dropTaskOn = async (a: FloorAgent, task: string) => {
-    if (!canDispatch) return;
-    AudioEngine.play("assign");
-    try {
-      const r = await trpc.threads.dispatch.mutate({ title: task, presetKey: a.presetKey, runImmediately: true }) as Record<string, unknown>;
-      if (r.kind === "clarify") setMsg(clientChineseText(r.question, "指令需要更具体"));
-      else setMsg(`已把「${task.slice(0, 18)}」派给 ${clientChineseText(a.name, actorText(a.presetKey))}`);
-    } catch (err) {
-      setMsg(safeInteractionError(err, "派活暂时未完成，请稍后重试。"));
-    }
-    setTimeout(() => setMsg(""), 3500);
-    await load();
-  };
-
-  /** 驳回弹窗提交（M1.2 受控枚举 + L5.2 留痕） */
-  const submitReject = async (r: { reasonEnum: string; reasonLabel?: string; reasonText?: string }) => {
-    if (!rejectTarget) return;
-    await trpc.approvals.decide.mutate({
-      approvalId: rejectTarget,
-      gesture: "reject",
-      reasonEnum: r.reasonEnum,
-      reasonText: r.reasonText,
-    });
-    setRejectTarget(null);
-    setMsg(`已驳回（${clientChineseText(r.reasonLabel, "其他原因")}），全链留痕`);
-    setAskPick(null);
-    setTimeout(() => setMsg(""), 3000);
-    await load();
-  };
 
   const showCeremony = ceremony < 5;
   return (
@@ -470,18 +420,22 @@ export default function P0() {
           <button onClick={() => switchView("floor")} className={`px-2 py-0.5 ${view === "floor" ? "bg-gold/15 text-gold" : "text-ink3 hover:text-ink2"}`}>职场</button>
           <button onClick={() => switchView("stage")} className={`px-2 py-0.5 ${view === "stage" ? "bg-gold/15 text-gold" : "text-ink3 hover:text-ink2"}`}>舞台</button>
         </div>
-        <span className={`rounded border px-2 py-0.5 text-body ${tone === "amber" ? "border-amber-500/60 text-amber-600" : tone === "gold" ? "border-gline text-gold" : "border-line text-ink3"}`}>
-          {MODE_TEXT[data?.mode ?? ""] ?? "…"}
-        </span>
-        <ValueCounters />
-        <AudioSettings />
-        {welcome && !showWelcome && (
-          <button
-            type="button"
-            onClick={() => void replayWelcome()}
-            className="min-h-10 max-w-full whitespace-normal break-words rounded border border-line px-2 py-1 text-body text-ink3 hover:border-gline hover:text-gold"
-          >重播欢迎</button>
+        {/* 本机个人使用：银带删除后，演示数据披露由这枚小徽标承担（不占行、不可点） */}
+        {isLocalFull() && (
+          <span
+            className="rounded border border-line px-2 py-0.5 text-body text-ink3"
+            title="当前为示例装配的模拟运行态：数据与团队可真实操作，但不是真实客户的经营数据"
+          >
+            演示数据
+          </span>
         )}
+        {/* 本机个人使用：不展示「试用期/未授权」等开通类角标（启动器注入 VITE_WORKLOOM_LOCAL_FULL=1） */}
+        {!isLocalFull() && (
+          <span className={`rounded border px-2 py-0.5 text-body ${tone === "gold" ? "border-gline text-gold" : "border-line text-ink3"}`}>
+            {MODE_TEXT[data?.mode ?? ""] ?? "…"}
+          </span>
+        )}
+        <ValueCounters />
       </header>
 
       {/* 模拟数据横幅（D24：引导落地向导接入真实数据与真实大模型） */}
@@ -493,49 +447,23 @@ export default function P0() {
       <main className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-center px-4">
         {view === "floor" && data?.floor ? (
           <div className={`w-full max-w-3xl transition-all duration-1000 ${showCeremony && ceremony < 2 ? "scale-95 opacity-0" : "opacity-100"}`}>
-            <div className="mb-1 flex min-w-0 flex-wrap items-center gap-2 px-1 text-body text-ink2">
-              <span className="font-semibold text-holo">{clientChineseText(data.floor.scene.name, "数字职场")}</span>
-              <span>·</span><span>{data.floor.agents.filter((a) => a.state === "working").length} 工作中</span>
-              <span>·</span><span className={data.floor.agents.some((a) => a.state === "asking") ? "text-amber-600" : ""}>{data.floor.agents.filter((a) => a.state === "asking").length} 请您定</span>
-              <span>·</span><span>{data.floor.agents.filter((a) => a.state === "idle").length} 待命</span>
-              <span className="flex-1" />
-              <span className="text-ink2">悬停看岗位 · 点员工派活 · 点举手者审批 · 拖任务卡到员工身上</span>
-            </div>
-            {/* 可拖任务卡（拖拽派活：拖到 3D 员工身上即下达） */}
-            <div className="mb-1 flex min-w-0 flex-wrap items-center gap-1.5 px-1">
-              <span className="text-body text-ink3">任务卡 →</span>
-              {taskCards.map((task) => (
-                <div
-                  key={task}
-                  draggable
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData("text/workloom-task", task);
-                    e.dataTransfer.effectAllowed = "copy";
-                  }}
-                  className="max-w-full cursor-grab break-words rounded-full border border-gline bg-card px-2.5 py-1 text-body text-gold shadow-sm transition-transform hover:scale-105 active:cursor-grabbing"
-                  title="拖到职场里的员工身上"
-                >
-                  {task}
-                </div>
-              ))}
-            </div>
+            {/* 顶部状态行 / 批次控件 / 操作提示 / 任务卡：2026-09-20 产品决定全部删除（保持主视图纯粹） */}
             {!showWelcome && webglOk ? (
               <Floor3D
                 directorEvent={directorEvent}
-                floor={data.floor}
+                floor={{ ...data.floor, agents: visibleFloorAgents }}
                 ceoName={clientChineseText(data.ceoName, "公司负责人")}
-                onPickAgent={(a) => { if (canDispatch) setPick({ id: a.id, presetKey: a.presetKey, name: a.name, grade: data.satellites.find((s) => s.id === a.id)?.grade ?? "正常" }); }}
-                onPickApproval={(a) => { if (canApprove) setAskPick(a); }}
-                onDecide={(id, g) => { if (canApprove) void decide(id, g); }}
-                onDropTask={canDispatch ? (a, task) => void dropTaskOn(a, task) : undefined}
+                onPickAgent={(a) => setPick({ id: a.id, presetKey: a.presetKey, name: a.name, grade: data.satellites.find((s) => s.id === a.id)?.grade ?? "正常" })}
+                onOpenProfile={(a) => navigate(`/agents/${encodeURIComponent(a.id)}`)}
+                onOpenTask={(threadId) => navigate(`/tasks/${encodeURIComponent(threadId)}`)}
               />
             ) : (
               <FloorView
-                floor={data.floor}
+                floor={{ ...data.floor, agents: visibleFloorAgents }}
                 ceoName={clientChineseText(data.ceoName, "公司负责人")}
-                onPickAgent={(a) => { if (canDispatch) setPick({ id: a.id, presetKey: a.presetKey, name: a.name, grade: data.satellites.find((s) => s.id === a.id)?.grade ?? "正常" }); }}
-                onPickApproval={(a) => { if (canApprove) setAskPick(a); }}
-                onDecide={(id, g) => { if (canApprove) void decide(id, g); }}
+                onPickAgent={(a) => setPick({ id: a.id, presetKey: a.presetKey, name: a.name, grade: data.satellites.find((s) => s.id === a.id)?.grade ?? "正常" })}
+                onOpenProfile={(a) => navigate(`/agents/${encodeURIComponent(a.id)}`)}
+                onOpenTask={(threadId) => navigate(`/tasks/${encodeURIComponent(threadId)}`)}
               />
             )}
           </div>
@@ -557,76 +485,10 @@ export default function P0() {
           </div>
         )}
 
-        {/* 语音气泡 + 聊天 */}
-        <div className="mt-2 w-full max-w-2xl space-y-2">
-          <TypeBubble text={speech} tone={tone} />
-          {chat.slice(-3).map((m, i) => (
-            <div key={i} className={`flex ${m.from === "me" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[85%] rounded-xl border px-3 py-2 text-sm ${m.from === "me" ? "border-line bg-panel text-ink2" : "border-gline bg-card text-ink"}`}>
-                {m.text}
-              </div>
-            </div>
-          ))}
-
-          {/* L4 请示卡（聚光灯）：有审批动作权可拍板；只读角色（游客）仍可看见待决事项——这是示例工作区最有说服力的展示面 */}
-          {(canApprove || canReadApprovals) && queue.length > 0 && (
-            <div className="space-y-2 rounded-xl border border-amber-400/40 bg-amber-400/5 p-3 shadow-[0_0_40px_rgba(255,190,106,.12)]">
-              <div className="text-body tracking-[.2em] text-amber-300">请您决策 · {queue.length} 件</div>
-              {queue.slice(0, 2).map((q) => (
-                <div key={q.approval_id} className="rounded-lg border border-amber-300/30 bg-card p-3">
-                  <div className="break-words text-body text-ink2">
-                    <b>{clientChineseText(q.snapshot.title, actionText(q.snapshot.action ?? q.payload.decision.action))}</b>
-                    <span className="ml-2 text-ink3">{payloadText(q.snapshot.params ?? {}, 80)}</span>
-                  </div>
-                  {q.snapshot.summary && clientChineseText(q.snapshot.summary, "") && (
-                    <div className="mt-0.5 break-words text-body text-ink3">{clientChineseText(q.snapshot.summary, "")}</div>
-                  )}
-                  {q.snapshot.ceo_rationale && <div className="mt-1 break-words text-body text-holo">公司负责人意见：{clientChineseText(q.snapshot.ceo_rationale, "负责人意见待确认")}</div>}
-                  {canApprove ? (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button onClick={() => void decide(q.approval_id, "approve")} className="inline-flex items-center gap-1 rounded border border-go/50 px-3 py-1 text-body text-go"><Icon name="check" size={14} />批准</button>
-                      <button onClick={() => void decide(q.approval_id, "reject")} className="inline-flex items-center gap-1 rounded border border-warn/50 px-3 py-1 text-body text-warn"><Icon name="error" size={14} />驳回</button>
-                    </div>
-                  ) : (
-                    <div className="mt-2 text-body text-ink3">只读体验中 · 正式开通后即可拍板</div>
-                  )}
-                </div>
-              ))}
-              {queue.length > 2 && <Link to="/executive" className="break-words text-body text-amber-300">其余 {queue.length - 2} 件 → 老板视图</Link>}
-            </div>
-          )}
-        </div>
       </main>
 
-      {/* 实况字幕条 */}
-      <div className="relative z-10 overflow-hidden border-t border-line/60 bg-panel/60 py-1.5 backdrop-blur">
-        <div className="flex min-w-0 flex-wrap gap-x-8 gap-y-1 px-4 text-body text-ink3">
-          {(data?.ticker ?? []).concat(data?.ticker ?? []).map((e, i) => (
-            <span key={i}><b className="text-ink2">{actionText(e.action)}</b> · {actorText(e.who)}</span>
-          ))}
-          {!data?.ticker.length && <span>实况待命中……</span>}
-        </div>
-      </div>
-
-      {/* 聊天框 */}
-      {canDispatch && <div className="relative z-20 border-t border-line bg-panel/80 p-3 backdrop-blur">
-        <div className="mx-auto flex min-w-0 max-w-2xl flex-wrap items-center gap-2">
-          {["今日怎么样", "批一下请示", "昨夜夜班汇报"].map((chip) => (
-            <button key={chip} onClick={() => void send(chip)} className="hidden max-w-full break-words rounded-full border border-line px-3 py-1.5 text-body text-ink3 hover:border-gline hover:text-gold sm:block">{chip}</button>
-          ))}
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") void send(input); }}
-            placeholder={`像跟 ${clientChineseText(data?.ceoName, "数字负责人")} 说话一样输入……（提问 / 安排任务 / 逐步商量）`}
-            className="min-w-0 flex-1 basis-64 rounded-full border border-line bg-card px-4 py-2.5 text-body text-ink outline-none placeholder:text-ink3 focus:border-gline"
-          />
-          <button disabled={busy} onClick={() => void send(input)}
-            className="rounded-full border border-gline bg-gold/10 px-5 py-2.5 text-body text-gold disabled:opacity-40">
-            {busy ? "…" : "发送"}
-          </button>
-        </div>
-      </div>}
+      {/* 实况字幕条：2026-09-20 产品决定删除（不再展示） */}
+      {/* 底部对话入口区：2026-09-20 产品决定整块删除（对话统一在右侧「织伴」全局框，⌘K 可唤起） */}
 
       {/* 员工指挥卡弹层（派活闭环：绩效速览 + 派活输入 + 岗位快捷任务） */}
       {canDispatch && pick && (
@@ -637,32 +499,9 @@ export default function P0() {
         />
       )}
 
-      {/* 职场请示卡：统一 Overlay 负责焦点圈定、Esc、背景关闭与焦点恢复。 */}
-      <Overlay
-        open={canApprove && askPick !== null}
-        title="请您决策"
-        description={askPick ? `${askPick.pendingTier === "l4_chairman" ? "老板级" : askPick.pendingTier === "l3_fleet" ? "集团负责人级" : "公司负责人级"}事项` : undefined}
-        onClose={() => setAskPick(null)}
-        footer={askPick && (
-          <>
-            <Button variant="quiet" onClick={() => setAskPick(null)}>稍后处理</Button>
-            <Button variant="danger" onClick={() => void decide(askPick.approvalId!, "reject")}>驳回</Button>
-            <Button variant="primary" onClick={() => void decide(askPick.approvalId!, "approve")}>批准</Button>
-          </>
-        )}
-      >
-        {askPick && (
-          <div className="min-w-0 space-y-2">
-            <div className="break-words text-sm font-bold text-ink">{clientChineseText(askPick.name, actorText(askPick.presetKey))}</div>
-            <div className="break-words text-body leading-relaxed text-ink2">{floorStatusText(askPick.statusLine, "当前事项需要您确认")}</div>
-          </div>
-        )}
-      </Overlay>
-
       {/* 开门仪式遮罩 */}
       {showCeremony && (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-bg950 transition-opacity duration-700"
-          role="status" aria-live="polite"
           style={{ opacity: ceremony >= 4 ? 0 : 1, pointerEvents: ceremony >= 4 ? "none" : "auto" }}>
           <div className="text-center">
             <div className={`mx-auto mb-4 h-3 w-3 rounded-full bg-gold transition-all duration-700 ${ceremony >= 2 ? "scale-[3] shadow-[0_0_60px_#e8edf4]" : "scale-100"}`} />
@@ -670,7 +509,7 @@ export default function P0() {
               团队全员就位
             </div>
             <div className={`mt-2 text-body text-ink3 transition-opacity duration-700 ${ceremony >= 4 ? "opacity-100" : "opacity-0"}`}>
-              向您报到，老板
+              向您报到，董事长
             </div>
           </div>
         </div>
@@ -692,15 +531,40 @@ export default function P0() {
         />
       )}
       {/* 新闻台字幕条（语音字幕等价物 + 降级兜底） */}
-      <SubtitleBar channelName={`${wsName} · 晨会`} />
-      {/* 行业页内插槽（首页浮层）：行业仓只能在 extensions/** 声明，受管页面不做行业分支判断 */}
-      <IndustrySlot name="home.overlay" />
-      <RejectDialog
-        open={canApprove && rejectTarget !== null}
-        mode="reject"
-        onCancel={() => setRejectTarget(null)}
-        onSubmit={(r) => void submitReject(r)}
-      />
+      {/* 首日上岗：常驻入口（织伴待命位）+ 引导壳（五关）；内容包随活动 Bundle 切换 */}
+      {questlineContent && (
+        <QuestlineContentProvider content={questlineContent}>
+          {!showWelcome && (
+            <QuestlineHud
+              summary={questline.summary}
+              level={questline.level}
+              xp={questline.xp}
+              achievements={questline.state.achievements}
+              serverXp={serverXp}
+              completed={questline.state.status === "completed"}
+              onOpen={questline.openQuestline}
+            />
+          )}
+          <QuestlineOverlay
+            open={questline.open && !showWelcome}
+            state={questline.state}
+            level={questline.level}
+            xp={questline.xp}
+            celebration={questline.celebration}
+            canDispatch={canDispatch}
+            onClose={questline.closeQuestline}
+            onCompleteStage={questline.completeCurrent}
+            onSkipStage={questline.skipCurrent}
+            onLightCard={questline.markCard}
+            onFact={markQuestFact}
+            onXp={questline.noteXp}
+            onThreadId={questline.setThreadId}
+            onClearCelebration={questline.clearCelebration}
+            onTrack={questline.track}
+          />
+        </QuestlineContentProvider>
+      )}
+      {/* 播报台/字幕条：2026-09-20 产品决定删除（语音字幕不再常驻经营主页） */}
     </div>
   );
 }

@@ -65,7 +65,7 @@ export default function P27() {
       await ensureDemoLogin();
       await fn();
     } catch (error) {
-      console.error("资料录入操作失败", error);
+      console.error("配置录入操作失败", error);
       setErr("操作未能完成；草稿没有改变，请检查网络后重试。");
     }
     finally { setBusy(false); }
@@ -116,7 +116,7 @@ export default function P27() {
   };
 
   if (bundleStatus === "loading") {
-    return <AsyncState status="loading" title="正在读取当前行业配置" description="资料录入会严格使用当前工作区已安装的行业包。" />;
+    return <AsyncState status="loading" title="正在读取当前行业配置" description="配置录入会严格使用当前工作区已安装的行业包。" />;
   }
   if (bundleStatus === "error") {
     return <AsyncState status="error" title="当前行业配置暂时无法读取" description="系统没有使用默认行业配置，以免把草稿写入错误行业。" onRetry={reload} />;
@@ -130,7 +130,7 @@ export default function P27() {
 
   return (
     <div className="mx-auto max-w-[820px] px-6 py-8 text-ink">
-      <h1 className="text-lg font-bold">资料录入</h1>
+      <h1 className="text-lg font-bold">配置录入中心</h1>
       <p className="mt-1 text-body text-ink2">
         说人话、丢文件，分钟级完成定制：AI 结构化为意图卡 → 您逐张确认 → 草稿 → 定制中心考试生效。
         全程可回滚，每条资产都能查到「是哪句话、哪份文件说进来的」。
@@ -227,7 +227,7 @@ export default function P27() {
               className="rounded-lg bg-go px-5 py-2 text-body font-bold text-black disabled:opacity-40">
               {busy ? "提交中…" : `确认选中的 ${checked.size} 条，生成草稿 →`}
             </button>
-            <span className="text-body text-ink3">草稿不会直接生效——生效要走定制中心的考试与审批，随时可回滚</span>
+            <span className="text-body text-ink3">草稿不会直接生效——生效要走定制中心的考试与留痕，随时可回滚</span>
           </div>
         </div>
       )}

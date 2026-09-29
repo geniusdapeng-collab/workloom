@@ -268,14 +268,8 @@ export async function webSearchFacts(question: string): Promise<AskFactResult> {
 /** GR-09：回答长度硬闸（超长截断并标注，避免一次性糊屏） */
 export const ASK_ANSWER_MAX_CHARS = 120;
 
-/**
- * mock 口径的确定性合成（数字全真，文案模板）。
- *
- * 导出是刻意的（2026-09-29 第二次修复）：GR-09 的 120 字硬闸与"知识命中优先级"是**组合后**才成立的
- * 不变量，必须能被各仓的套件直接断言（否则只能靠真机跑 ask，跨仓不可移植——panda 等仓的工作区
- * 与 suite 默认 scope 不同，跑真机 ask 会先撞 RLS/FK 而看不到这条不变量）。
- */
-export function composeAskAnswer(question: string, facts: AskFact[]): string {
+/** mock 口径的确定性合成（数字全真，文案模板） */
+function composeAnswer(question: string, facts: AskFact[]): string {
   const lines = facts.map((f) => `· ${f.label}：${f.value}`);
   /**
    * 标题里的问题**必须截断**：GR-09 是 120 字硬闸，标题若跟着用户原话膨胀，
@@ -344,8 +338,8 @@ function enforceAnswerLimits(text: string): string {
   return `${kept.join("\n").trimEnd()}…（已截断）`;
 }
 
-/** 读取本工作区生效围栏规则（ask 输出闸门用；读失败不阻塞回答，只是闸门退化为仅长度限制） */
-async function loadAskRules(app: pg.Pool, scope: Scope): Promise<RuntimeRule[]> {
+/** 读取本工作区生效围栏规则（ask 输出闸门用；返回 null=加载失败——A-06：与"无规则"区分，闸门失效必须留痕不得静默放行） */
+async function loadAskRules(app: pg.Pool, scope: Scope): Promise<RuntimeRule[] | null> {
   const client = await app.connect();
   try {
     await client.query("BEGIN");
@@ -368,7 +362,7 @@ async function loadAskRules(app: pg.Pool, scope: Scope): Promise<RuntimeRule[]> 
     }));
   } catch {
     await client.query("ROLLBACK").catch(() => undefined);
-    return [];
+    return null; // A-06：加载失败返回 null（闸门不可用），下游必须显式标注而非按空规则集静默放行
   } finally {
     client.release();
   }
@@ -399,6 +393,12 @@ export async function runAsk(
   scope: Scope,
   input: { threadId: string; goal: string; presetKey: string; llmCall?: (prompt: string) => Promise<string> },
 ): Promise<AskResult> {
+  // A-02 修复：ask 执行期间先认领线程（queued→running CAS）——问询全程最长 45s LLM 预算，
+  // 此前线程一直挂 queued，调度器 7s 扫描会把它当 quest 重入执行（问询变真实派单）。
+  await app.query(
+    `UPDATE threads SET status='running', updated_at=now() WHERE id=$1 AND workspace_id=$2 AND status='queued'`,
+    [input.threadId, scope.workspaceId],
+  );
   const { facts, sources } = await gatherFacts(app, scope, input.goal);
   // 联网实时检索（ASK_WEB_SEARCH=1）：与库内事实合并，供模型合成
   if ((process.env.ASK_WEB_SEARCH ?? "") === "1") {
@@ -430,19 +430,24 @@ ${input.goal}
 </question>`;
     try {
       const text = (await input.llmCall(prompt)).trim();
-      if (text) { answer = text; via = "llm"; } else { answer = composeAskAnswer(input.goal, facts); }
+      if (text) { answer = text; via = "llm"; } else { answer = composeAnswer(input.goal, facts); }
     } catch {
-      answer = composeAskAnswer(input.goal, facts); // 模型异常 → 确定性兜底（不静默：via=rule）
+      answer = composeAnswer(input.goal, facts); // 模型异常 → 确定性兜底（不静默：via=rule）
       modelDegraded = true;
     }
   } else {
-    answer = composeAskAnswer(input.goal, facts);
+    answer = composeAnswer(input.goal, facts);
   }
 
   /* ---------- GR-09：三层输出闸门（硬约束 → 事实软校验 → 合成标识） ---------- */
   answer = enforceAnswerLimits(answer);
   const askRules = await loadAskRules(app, scope);
-  const gate = judgeAnswer(askRules, answer);
+  // A-06 修复：规则加载失败（DB 抖动等）此前按空规则集恒 auto 静默放行——行业 ask.deliver
+  // block 红线失效且无留痕。现在显式标注闸门不可用（保守口径：可见降级，不假装闸门生效）。
+  if (askRules === null) {
+    answer = `${answer}\n（输出闸门暂不可用，本回答未经行业规则校验，请人工核对关键事实）`;
+  }
+  const gate = judgeAnswer(askRules ?? [], answer);
   if (gate.level === "block") {
     // 行业事实红线：不投递原答案，改为安全回执（并把触发规则写进 basis 供复盘）
     answer = `该回答触发了行业事实红线（${gate.triggeredBy.join("、")}），已拦截。请核对账本事实后人工确认。`;

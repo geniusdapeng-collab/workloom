@@ -48,7 +48,7 @@ export function agentOfApproval(a: ApprovalLike): GateAgent & { fallback?: boole
   const action = a.event?.decision.action ?? "";
   const byAction = ACTION_GATE.find(([p]) => action.startsWith(p));
   if (byAction) return GATE_AGENT_MAP[byAction[1]]!;
-  return { gate: "", presetKey: "", name: a.event?.who.id ?? "值班 Agent", fallback: true };
+  return { gate: "", presetKey: "", name: "值班数字员工", fallback: true };
 }
 
 /** 动作码 → 请示语气动作短语（§9.1 副官语气：动作码不直接上屏） */

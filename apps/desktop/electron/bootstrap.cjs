@@ -83,6 +83,23 @@ function spawnLogged(cmd, args, opts, logFile) {
   return child;
 }
 
+// The server starts from our bundled Node by absolute path, but some local renderers
+// start their own `node` child. A GUI launch may inherit no system Node in PATH.
+function withBundledNodePath(env, nodeBin, platform = process.platform) {
+  const pathApi = platform === "win32" ? path.win32 : path.posix;
+  if (!pathApi.isAbsolute(nodeBin)) throw new Error(`内置 Node 路径必须为绝对路径：${nodeBin}`);
+  const next = { ...env };
+  const pathKeys = Object.keys(next).filter((key) => platform === "win32" ? key.toLowerCase() === "path" : key === "PATH");
+  const pathKey = pathKeys[0] ?? (platform === "win32" ? "Path" : "PATH");
+  const inheritedPath = next[pathKey] || "";
+  // Windows environment keys are case insensitive; keep one PATH spelling so a
+  // duplicate key cannot hide the bundled runtime when child_process spawns.
+  for (const key of pathKeys) delete next[key];
+  const delimiter = platform === "win32" ? ";" : ":";
+  next[pathKey] = [pathApi.dirname(nodeBin), inheritedPath].filter(Boolean).join(delimiter);
+  return next;
+}
+
 function killTree(child) {
   if (!child || child.killed) return;
   try {
@@ -360,12 +377,6 @@ function buildDesktopEnvironment(text, {
   adminPassword,
   appPassword,
   gatewayPassword,
-  /**
-   * 载荷运行时目录（绝对路径）。GR-15 的执行器注册表要从载荷内桥源码派生，
-   * 因此必须由调用方传入——原先直接引用外层函数的 `RUNTIME` 常量，
-   * 在测试/独立调用路径下是未定义变量（ReferenceError，基座桌面用例实测命中）。
-   */
-  runtimeDir,
 }) {
   const values = {
     DATABASE_URL: databaseUrl("postgres", adminPassword, pgPort),
@@ -381,8 +392,7 @@ function buildDesktopEnvironment(text, {
    * 没有这一行，桌面上任何含写步骤的 quest 都会落 `connector-required`（未核实）而无法交付。
    * 规格与端口/工具名都从载荷内的桥源码派生（bundle 增删桥后无需改本文件）。
    */
-  // 未传 runtimeDir（独立调用/单测场景）时跳过注入：宁可少一行约定，也不抛 ReferenceError/TypeError
-  const toolExecutorModules = runtimeDir ? resolveToolExecutorModules(runtimeDir) : null;
+  const toolExecutorModules = resolveToolExecutorModules(RUNTIME);
   if (toolExecutorModules) values.WORKLOOM_TOOL_EXECUTOR_MODULES = toolExecutorModules;
   let next = text;
   for (const [key, value] of Object.entries(values)) next = upsertEnvValue(next, key, value);
@@ -954,7 +964,6 @@ async function bootstrap(opts) {
   const appPassword = databaseState.credentials.app;
   const gatewayPassword = databaseState.credentials.gateway;
   const desktopConfig = buildDesktopEnvironment(envText, {
-    runtimeDir: RUNTIME,
     pgPort: PG_PORT,
     serverPort: SERVER_PORT,
     webPort: WEB_PORT,
@@ -975,7 +984,7 @@ async function bootstrap(opts) {
     WORKLOOM_WEB_PORT: String(WEB_PORT),
     WORKLOOM_NATS_PORT: String(NATS_PORT),
   };
-  const serverEnv = { ...desktopEnv, NODE_ENV: "production" };
+  const serverEnv = withBundledNodePath({ ...desktopEnv, NODE_ENV: "production" }, NODE_BIN);
   const runDatabaseHelper = (mode, legacyPasswords = []) => run(NODE_BIN, [DB_HELPER], {
     env: {
       ...desktopEnv,
@@ -1280,4 +1289,5 @@ module.exports = {
   openExternalUrl,
   acquireBootstrapLock,
   tarExtractionPlan,
+  withBundledNodePath,
 };

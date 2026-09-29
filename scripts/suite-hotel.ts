@@ -12,6 +12,7 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { judge, type RuntimeRule } from "@workloom/base/fence-engine";
+import { composeWorkforce } from "@workloom/base/bundles";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
@@ -66,7 +67,10 @@ const J = (input: Parameters<typeof judge>[0]) => judge(input, fenceRules, "revi
 /* ================= A · Bundle 完整性 ================= */
 const a = C("A");
 a("bundle.json 声明的全部资产路径存在", () => {
-  for (const paths of Object.values(bundleJson.workloom.provides) as string[][]) {
+  // provides 既有数组资产（presets/skills/…），也有单值字符串（modelPolicy）——只校验数组项，
+  // 否则字符串会被逐字符遍历，产生「缺失资产 m」这类假失败（组合包同样适用）。
+  for (const paths of Object.values(bundleJson.workloom.provides) as Array<string[] | string>) {
+    if (!Array.isArray(paths)) continue;
     for (const p of paths) assert(existsSync(join(BUNDLE, p)), `缺失资产 ${p}`);
   }
 });
@@ -177,9 +181,21 @@ b("基线回归：R2 保底价熔断仍生效", () => {
 
 /* ================= C · 种子与运行态 ================= */
 const c = C("C");
-c("16 个 Agent 实例装载", async () => {
-  const r = await q(`SELECT count(*) n FROM agents WHERE workspace_id=$1`, [WS]);
-  assert(Number(r.rows[0].n) === 16, `agents=${r.rows[0].n}`);
+c("16 个酒店岗全部在编（组合编制全员在编）", async () => {
+  /**
+   * 组合编制口径（hotel + ai-video + geo-growth，主包 geo-growth 裁决同名遮蔽）：
+   * 期望总数**从装配器实时推导**，不再写死数字——2026-09-24 实测 78 岗
+   * （历史写死值 72 已随岗位扩充漂移，导致本用例长期误报）。
+   * 种子走的是同一个 provisionComposedWorkforce（scripts/seed.ts），所以两者必然一致。
+   */
+  const expected = composeWorkforce("geo-growth").presets.size;
+  const all = await q(`SELECT count(*) n FROM agents WHERE workspace_id=$1`, [WS]);
+  assert(Number(all.rows[0].n) === expected, `组合编制 agents=${all.rows[0].n}（装配器期望 ${expected}）`);
+  const hotel = await q(
+    `SELECT count(*) n FROM agents WHERE workspace_id=$1 AND (meta->>'sourceBundleId' = 'hotel' OR meta->>'sourceBundleId' IS NULL)`,
+    [WS],
+  );
+  assert(Number(hotel.rows[0].n) === 16, `酒店岗=${hotel.rows[0].n}`);
 });
 c("获客 4 员工在编且 preset 夜班声明正确", async () => {
   const r = await q(`SELECT preset_key FROM agents WHERE workspace_id=$1 AND preset_key IN ('ai-receptionist','coupon-operator','guest-success','channel-watcher')`, [WS]);

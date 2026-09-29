@@ -3,7 +3,7 @@
  *  - 记忆可读可改可禁用：企业的「口味、规矩、教训」是看得见摸得着的数据资产（信任+纠偏通道）
  *  - 每条记忆可反查来源事件与被引用记录（F1.4 归因闭环）
  *  - 来源人一键清算：成员离任/换岗时作废其手势沉淀的偏好（防个人口味过拟合，D24 修订 2）
- *  - 进化积分卡：北极星=审批一次通过率，趋势看斜率；记忆引用量=偏好注入生效口径
+ *  - 进化积分卡：北极星=关卡一次放行率，趋势看斜率；记忆引用量=偏好注入生效口径
  * 权限态：readonly 隐藏编辑/禁用/清算按钮（服务端 writeProcedure 同样 403，前端隐藏非置灰）
  */
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -99,7 +99,7 @@ export default function P23() {
       setDataState("ready");
     } catch (error) {
       if (requestId !== dataSequence.current) return;
-      console.warn("读取组织经验失败", error);
+      console.warn("读取组织记忆失败", error);
       const failure = toUiFailure(error);
       setStateMessage(failure.message);
       setDataState(failure.kind === "forbidden" ? "forbidden" : "error");
@@ -125,7 +125,7 @@ export default function P23() {
       setBanner({ level: "info", text: `服务端已确认停用这条记忆${result.eventId ? `，账本事件 ${shortId(result.eventId)}` : ""}。后续决策不再引用该记忆。` });
       await load(true);
     } catch (error) {
-      console.warn("停用组织经验失败", error);
+      console.warn("停用组织记忆失败", error);
       setBanner({ level: "alert", text: operationFailure(error, "记忆停用") });
     } finally {
       setBusy(null);
@@ -187,7 +187,7 @@ export default function P23() {
       setBanner({ level: "info", text: "服务端已确认更新，校准记录已写入事件账本。" });
       await load(true);
     } catch (error) {
-      console.warn("更新组织经验失败", error);
+      console.warn("更新组织记忆失败", error);
       setBanner({ level: "alert", text: operationFailure(error, "记忆更新") });
     } finally {
       setBusy(null);
@@ -227,7 +227,7 @@ export default function P23() {
       });
       await load(true);
     } catch (error) {
-      console.warn("组织经验提炼失败", error);
+      console.warn("组织记忆提炼失败", error);
       setBanner({ level: "alert", text: operationFailure(error, "记忆提炼") });
     } finally {
       setBusy(null);
@@ -257,7 +257,7 @@ export default function P23() {
           <AsyncState
             status={accessStatus === "error" ? "error" : "loading"}
             title={accessStatus === "loading" ? "正在确认记忆权限" : undefined}
-            description="身份确认完成前，系统保持只读并且不会显示组织经验。"
+            description="身份确认完成前，系统保持只读并且不会显示组织记忆。"
             onRetry={accessStatus === "error" ? reloadAccess : undefined}
           />
         </div>
@@ -271,7 +271,7 @@ export default function P23() {
         <div className="mx-auto max-w-3xl px-5 py-16">
           <AsyncState
             status={dataState === "forbidden" ? "forbidden" : dataState === "error" ? "error" : "loading"}
-            title={dataState === "loading" ? "正在读取组织经验" : undefined}
+            title={dataState === "loading" ? "正在读取组织记忆" : undefined}
             description={stateMessage || undefined}
             onRetry={dataState === "error" ? () => void load() : undefined}
           />
@@ -283,7 +283,7 @@ export default function P23() {
   return (
     <Bridge>
       <div className="mx-auto w-full min-w-0 max-w-5xl px-3 py-6 sm:px-5">
-        <div className="mb-1 text-lg font-bold text-ink">组织经验中心</div>
+        <div className="mb-1 text-lg font-bold text-ink">组织记忆中心</div>
         <div className="mb-4 break-words text-body text-ink3">
           企业的口味、规矩与教训，是数字员工持续改进的依据。内容可读、可改、可停用，每次变更都写入不可篡改的事件账本。
         </div>
@@ -305,13 +305,13 @@ export default function P23() {
           </div>
         )}
         {dataState === "loading" && (
-          <div className="mb-3"><BannerAlert level="info">正在按新条件读取组织经验，完成前继续显示上一次成功快照且不开放写操作。</BannerAlert></div>
+          <div className="mb-3"><BannerAlert level="info">正在按新条件读取组织记忆，完成前继续显示上一次成功快照且不开放写操作。</BannerAlert></div>
         )}
 
         {/* 进化积分卡（M5：北极星 + 趋势斜率） */}
         <div className="mb-5 grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-2 2xl:grid-cols-4">
           <div className="min-w-0 break-words rounded-xl border border-gold/40 bg-panel p-4">
-            <div className="break-words text-body tracking-widest text-ink3">北极星 · 审批一次通过率</div>
+            <div className="break-words text-body tracking-widest text-ink3">北极星 · 关卡一次放行率</div>
             <div className="mt-1 text-2xl font-bold text-gold">{pct(t?.firstPassRate ?? null)}</div>
             <div className="mt-1 text-body text-ink3">已裁决 {t?.decided ?? 0} 条（批 {t?.approved ?? 0} / 改 {t?.edited ?? 0} / 驳 {t?.rejected ?? 0}）</div>
           </div>
@@ -368,7 +368,8 @@ export default function P23() {
             </button>
             <span className="text-ink3">（生产由夜班窗口自动运行；统计闸：样本不足只观察不提炼）</span>
             {canRecall && <><span className="mx-1 text-line">|</span>
-              <select value={recallMember} disabled={Boolean(busy)} onChange={(e) => setRecallMember(e.target.value)} className="w-56 max-w-full min-w-0 rounded border border-line bg-bg950 px-2 py-1.5 text-ink outline-none focus:border-gold/60">
+              {/* axe 2.x select-name：仅靠 placeholder option 不算可访问名——补 aria-label（U5-01） */}
+              <select value={recallMember} disabled={Boolean(busy)} aria-label="选择需要清算偏好记忆的来源成员" onChange={(e) => setRecallMember(e.target.value)} className="w-56 max-w-full min-w-0 rounded border border-line bg-bg950 px-2 py-1.5 text-ink outline-none focus:border-gold/60">
                 <option value="">选择需要清算的来源成员</option>
                 {members.map((member) => <option key={member.memberNo} value={member.memberNo}>{member.name}</option>)}
               </select>
@@ -399,7 +400,7 @@ export default function P23() {
         {/* 记忆列表 */}
         {memories.length === 0 && (
           <div className="rounded-xl border border-line bg-panel p-8 text-center text-body text-ink3">
-            {showRecalled ? "回收区暂无记忆。" : "暂无记忆。系统会在你审批、驳回、改稿的过程中持续沉淀——也可以点「立即运行记忆提炼」。"}
+            {showRecalled ? "回收区暂无记忆。" : "暂无记忆。系统会在你放行、退回、改稿的过程中持续沉淀——也可以点「立即运行记忆提炼」。"}
           </div>
         )}
         <div className="space-y-2">
@@ -483,7 +484,7 @@ export default function P23() {
             <div className="font-semibold text-ink">服务端影响预览</div>
             <div className="mt-1">记忆：{impact.affectedMemoryIds.length} 条</div>
             <div>数字员工：{impact.agents.length ? impact.agents.map((item) => item.name).join("、") : "没有已知直接引用"}</div>
-            <div>关联安全规则：{impact.rules.length ? impact.rules.map((item) => item.name).join("、") : "没有已知直接引用"}</div>
+            <div>关联围栏：{impact.rules.length ? impact.rules.map((item) => item.name).join("、") : "没有已知直接引用"}</div>
             <div>进行中任务：{impact.activeTasks.length ? impact.activeTasks.map((item) => item.title).join("、") : "没有已知直接引用"}</div>
             <div className="mt-1 text-ink3">{impact.futureTaskPolicy}</div>
           </div>}

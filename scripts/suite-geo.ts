@@ -11,6 +11,7 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { judge, type RuntimeRule } from "@workloom/base/fence-engine";
+import { composeWorkforce } from "@workloom/base/bundles";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
@@ -52,22 +53,50 @@ const fenceRules: RuntimeRule[] = (fenceDoc.rules ?? []).map((r: { rule_id: stri
 }));
 const objectsJson = JSON.parse(readFileSync(join(BUNDLE, "schemas/objects.json"), "utf-8"));
 const stagesJson = JSON.parse(readFileSync(join(BUNDLE, "schemas/stages.json"), "utf-8"));
+/**
+ * 对象模型校验用**组合口径**：本包围栏（如 G-C01 内部协作放行）管的是组合编制（geo-growth + hotel + ai-video），
+ * 事件对象类型自然包含其它两包声明的生产对象（scene_card / shot_card / video_asset / subtitle_track …）。
+ * 只用本包 objects.json 会让这类跨包对象被判"未声明"（2026-09-24 实测 A-10 因此长期报红）。
+ */
 const objectTypes = new Set<string>(objectsJson.objects.map((o: { type: string }) => o.type));
+for (const sibling of ["ai-video", "hotel"]) {
+  const file = join(REPO_ROOT, "bundles", sibling, "schemas/objects.json");
+  if (!existsSync(file)) continue;
+  for (const o of JSON.parse(readFileSync(file, "utf-8")).objects as Array<{ type: string }>) objectTypes.add(o.type);
+}
+// 基座运行时对象（IM 线程 / 任务）：不属于任何行业包，但事件账本里普遍存在
+for (const runtimeType of ["thread", "task"]) objectTypes.add(runtimeType);
 const pipelines = readdirSync(join(BUNDLE, "pipelines")).filter(f => f.endsWith(".yml")).sort()
   .map(f => ({ file: f, doc: YAML.parse(readFileSync(join(BUNDLE, "pipelines", f), "utf-8")) }));
 const presetKeys = new Set<string>(presets.map(p => p.preset_key));
 const fenceIds = new Set<string>(fenceRules.map(r => r.rule_id));
+// 视觉栈围栏（G-VIS*，独立基线包）：presets 的 fence_bindings 校验必须并集，否则视觉岗被判"绑了不存在的围栏"
+const visualFenceDoc = YAML.parse(readFileSync(join(BUNDLE, "fences/geo-growth-visual.yml"), "utf-8"));
+const visualFenceRules: RuntimeRule[] = ((visualFenceDoc.rules ?? []) as Array<{ rule_id: string; name: string; level: RuntimeRule["level"]; is_baseline: boolean; match: { object_types: string[]; actions: string[] }; when: string }>).map(r => ({
+  rule_id: r.rule_id, version: visualFenceDoc.version, name: r.name, level: r.level, is_baseline: r.is_baseline,
+  objectTypes: r.match.object_types, actions: r.match.actions, when: r.when,
+}));
+for (const r of visualFenceRules) fenceIds.add(r.rule_id);
+/**
+ * 两个基线包（baseline + visual）的规则并集：E-04「rule_impact 引用的规则存在」必须按
+ * **工作区已激活的全部围栏包**判定。2026-09-20 真机验收修复：该检查此前只装 baseline 规则，
+ * 视觉岗正常引用 G-VIS2（block 级事实红线）被判「未知规则」——假失败，非产品缺陷。
+ */
+const allFenceRules: RuntimeRule[] = [...fenceRules, ...visualFenceRules];
 
 /* ================= A · Bundle 完整性 ================= */
 const a = C("A");
 a("bundle.json 声明的全部资产路径存在", () => {
-  for (const paths of Object.values(bundleJson.workloom.provides) as string[][]) {
+  // provides 既有数组资产（presets/skills/…），也有单值字符串（modelPolicy）——只校验数组项，
+  // 否则字符串会被逐字符遍历，产生「缺失资产 m」这类假失败。
+  for (const paths of Object.values(bundleJson.workloom.provides) as Array<string[] | string>) {
+    if (!Array.isArray(paths)) continue;
     for (const p of paths) assert(existsSync(join(BUNDLE, p)), `缺失资产 ${p}`);
   }
 });
-a("16 个 preset 且 preset_key 唯一", () => {
-  assert(presets.length === 16, `期望 16，实际 ${presets.length}`);
-  assert(presetKeys.size === 16, "preset_key 重复");
+a("27 个 preset（双域 16 + 视觉栈 2 + 获客用增 9，含 2 个 P2 条件岗）且 preset_key 唯一", () => {
+  assert(presets.length === 27, `期望 27，实际 ${presets.length}`);
+  assert(presetKeys.size === 27, "preset_key 重复");
 });
 a("preset 必填字段完整（含 prompt 三要素）", () => {
   for (const p of presets) {
@@ -86,8 +115,17 @@ a("夜班编制覆盖跨时区值守（≥5 员 night_shift）", () => {
   for (const k of ["visibility-watcher", "entity-inspector", "data-board-officer", "company-ceo"])
     assert(n.includes(k), `${k} 应为夜班（跨时区/凌晨巡检纪律）`);
 });
-a("围栏 17 条全部 is_baseline（只可加严）", () => {
-  assert(fenceRules.length === 17, `期望 17，实际 ${fenceRules.length}`);
+a("围栏包与 bundle 声明一致，且全部 is_baseline（只可加严）", () => {
+  /**
+   * 旧断言写死"25 条（双域 17 + 获客 8）"，随包演进漂移成假失败（2026-09-24 实测 28 条）。
+   * 这里改成**不变量**：磁盘围栏文件 = `bundle.json#provides.fences` 声明数，且规则全为基线。
+   * 数量本身以包为准，不再在测试里维护第二份真相。
+   */
+  const declaredFenceFiles = JSON.parse(readFileSync(join(BUNDLE, "bundle.json"), "utf-8")).workloom.provides.fences as string[];
+  const diskFenceFiles = readdirSync(join(BUNDLE, "fences")).filter((f) => /\.ya?ml$/i.test(f));
+  assert(declaredFenceFiles.length === diskFenceFiles.length,
+    `provides.fences=${declaredFenceFiles.length} 与磁盘围栏文件=${diskFenceFiles.length} 不一致`);
+  assert(fenceRules.length > 0, "围栏规则为空");
   assert(fenceRules.every(r => r.is_baseline), "存在非基线规则");
 });
 a("GEO 三闸到位：G-GEO1 review / G-GEO2 block / G-GEO3 block", () => {
@@ -109,7 +147,7 @@ a("围栏 match 引用的对象类型均在对象模型内", () => {
 });
 a("技能 frontmatter 完整且与 bundle.json 对齐", () => {
   const dirs = readdirSync(join(BUNDLE, "skills"));
-  assert(dirs.length === 6, `技能数 ${dirs.length}`);
+  assert(dirs.length === 29, `技能数 ${dirs.length}`);
   for (const d of dirs) {
     const raw = readFileSync(join(BUNDLE, "skills", d, "SKILL.md"), "utf-8");
     const m = raw.match(/^---\n([\s\S]*?)\n---\n/);
@@ -245,7 +283,9 @@ b("G18 熔断触发 → auto 放行但留痕", () => {
   assert(v.level === "auto", `${v.level}`);
 });
 b("未命中读类动作 → 恒 auto（不进 default）", () => {
-  const v = J({ object: { type: "intel_card" }, action: "intel_card.emit" });
+  // HP-02 口径：只读动词仅认 list/read/get/fetch/query/search/describe；emit 未知按写处理。
+  // 本用例验证「读类未命中恒 auto」，样例必须用真正的只读动作（intel_card.list）。
+  const v = J({ object: { type: "intel_card" }, action: "intel_card.list" });
   assert(v.level === "auto", `${v.level}`);
 });
 b("未命中写类动作 → default_level review", () => {
@@ -257,6 +297,22 @@ b("DSL 求值异常 → block（宁可错杀）", () => {
   const v = judge({ object: { type: "geo_content" }, action: "geo.publish" }, bad, "review");
   assert(v.level === "block" && v.evalErrors.length > 0, "异常未按 block 处理");
 });
+b("G-GROW7 生命周期岗未激活 → block", () => {
+  const v = J({ object: { type: "lifecycle_program" }, action: "lifecycle.touch.write", context: { p2_activated: false } });
+  assert(v.level === "block", `${v.level}`);
+});
+b("G-GROW7 生命周期岗激活后放行（未命中其他规则 → 写类 default review）", () => {
+  const v = J({ object: { type: "lifecycle_program" }, action: "lifecycle.touch.write", context: { p2_activated: true } });
+  assert(v.level === "review", `${v.level}`);
+});
+b("G-GROW8 渠道增长岗未激活 → block", () => {
+  const v = J({ object: { type: "partnership" }, action: "partnership.plan.write", context: { p2_activated: false } });
+  assert(v.level === "block", `${v.level}`);
+});
+b("G-GROW8 渠道增长岗激活后放行（未命中其他规则 → 写类 default review）", () => {
+  const v = J({ object: { type: "partnership" }, action: "partnership.plan.write", context: { p2_activated: true } });
+  assert(v.level === "review", `${v.level}`);
+});
 
 /* ================= C · 种子与运行态 ================= */
 const c = C("C");
@@ -264,22 +320,40 @@ c("工作区存在且行业为 geo-growth", async () => {
   const r = await q(`SELECT industry, stage FROM workspaces WHERE id=$1`, [WS]);
   assert(r.rows[0]?.industry === "geo-growth", `industry=${r.rows[0]?.industry}`);
 });
-c("16 员工全部 ready 落库", async () => {
+c("组合编制全部 ready 落库（本包 27 岗 ⊆ 组合编制，无缺岗）", async () => {
+  /**
+   * 2026-09-20 真机验收修复：花名册权威 = 装配器组合编制（geo-growth + hotel + ai-video，
+   * 同名遮蔽按主包裁决），与基座 seed.ts（ws-yunqi 组合编制全员）同口径；seed-geo 已按组合编制上岗。
+   * 旧断言写死 27（只数本包），组合上岗后必然假失败；
+   * 2026-09-24 进一步：**总数不再写死**（历史写死值 72 随岗位扩充漂移），改为装配器实时推导。
+   */
   const r = await q(`SELECT count(*) n, count(distinct preset_key) d FROM agents WHERE workspace_id=$1 AND status='ready'`, [WS]);
-  assert(Number(r.rows[0].n) === 16 && Number(r.rows[0].d) === 16, `agents=${r.rows[0].n}`);
+  const total = Number(r.rows[0].n);
+  const distinct = Number(r.rows[0].d);
+  const expected = composeWorkforce("geo-growth").presets.size;
+  assert(total === expected, `组合编制 agents=${total}（装配器期望 ${expected}）`);
+  assert(distinct === total, `agents=${total}/distinct=${distinct}`);
+  const missing = await q(
+    `SELECT p.preset_key FROM (VALUES ${presets.map((_p, i) => `($${i + 2}::text)`).join(",")}) AS p(preset_key)
+     LEFT JOIN agents a ON a.workspace_id=$1 AND a.preset_key=p.preset_key AND a.status='ready'
+     WHERE a.id IS NULL`,
+    [WS, ...presets.map((p) => String(p.preset_key))],
+  );
+  assert(missing.rows.length === 0, `本包未上岗：${missing.rows.map((x) => x.preset_key).join(",")}`);
 });
 c("员工 fence_bindings 原样落库（F2.10）", async () => {
   const r = await q(`SELECT preset_key, fence_bindings FROM agents WHERE workspace_id=$1 AND preset_key='geo-content-planner'`, [WS]);
   const fb = r.rows[0]?.fence_bindings as string[];
   assert(Array.isArray(fb) && fb.includes("G-GEO1") && fb.includes("G-GEO2"), "绑定丢失");
 });
-c("17 条围栏 active 装载", async () => {
+c("围栏按基线包全量 active 装载（库表 = 磁盘规则数）", async () => {
   const r = await q(`SELECT count(*) n FROM fence_rules WHERE workspace_id=$1 AND status='active' AND version='geo-growth-baseline/v1'`, [WS]);
-  assert(Number(r.rows[0].n) === 17, `fences=${r.rows[0].n}`);
+  const expected = fenceRules.filter((rule) => rule.version === "geo-growth-baseline/v1").length;
+  assert(Number(r.rows[0].n) === expected, `fences=${r.rows[0].n}（磁盘基线规则期望 ${expected}）`);
 });
-c("6 个 GEO 技能已安装", async () => {
+c("29 个 GEO 技能已安装（双域 6 + 视觉 14 + 获客用增 9）", async () => {
   const r = await q(`SELECT count(*) n FROM skill_installs si JOIN skills s ON s.id=si.skill_id WHERE si.workspace_id=$1 AND s.bundle='geo-growth'`, [WS]);
-  assert(Number(r.rows[0].n) === 6, `skills=${r.rows[0].n}`);
+  assert(Number(r.rows[0].n) === 29, `skills=${r.rows[0].n}`);
 });
 c("14 个触发器 enable", async () => {
   const r = await q(`SELECT count(*) n FROM triggers WHERE workspace_id=$1 AND enabled=true`, [WS]);
@@ -387,28 +461,63 @@ d("月度回测节拍存在（每月 1 日）", async () => {
 
 /* ================= E · 事件留痕合规 ================= */
 const e = C("E");
+/**
+ * 平台系统对象（不属于行业对象模型，事件合规检查统一豁免）：
+ *   thread/task/approval/conversation = 门禁活火事件（dispatch/quest/审批流）
+ *   company_ceo = CEO 节拍（晨报/裁决留痕）  client = 客户档案动作
+ *   workspace = 工作区级动作   member = 身份流程（欢迎仪式进度/重播）
+ *   store = 平台运行态（model.degraded 模型路由降级通告的落点）
+ */
+const SYSTEM_TYPES = new Set([
+  "thread", "task", "approval", "conversation", "company_ceo", "client", "workspace", "member", "store",
+  // review = 审批对象在事件里的平台别名（approval.gesture 的 object.type；2026-09-20 真机验收增补）
+  "review",
+  // secretary_reminder = 个人域（织伴「我的」）提醒对象：不属于行业对象模型（2026-09-20 三合一增补）
+  "secretary_reminder",
+]);
 e("ws-geo 事件 ≥60 条且五元字段完整（容忍门禁活火写入）", async () => {
   const r = await q(`SELECT count(*) n FROM biz_events WHERE workspace_id=$1`, [WS]);
   assert(Number(r.rows[0].n) >= 60, `events=${r.rows[0].n}`);
-  // 门禁活火事件（thread/task 对象：dispatch/quest/审批流）属系统面事件，receipt/model_trace 豁免（D31）
-  const bad = await q(`SELECT count(*) n FROM biz_events WHERE workspace_id=$1 AND COALESCE(payload->'object'->>'type','') NOT IN ('thread','task','approval','conversation','company_ceo','client')
-    AND (payload->>'who' IS NULL OR payload->>'object' IS NULL OR payload->>'decision' IS NULL OR payload->>'receipt' IS NULL OR payload->>'model_trace' IS NULL)`, [WS]);
+  // 门禁活火事件（thread/task 对象：dispatch/quest/审批流）与身份流程事件（member：欢迎仪式
+  // 进度/重播，由 onboarding-continuity 直接落账，不是模型工具调用）属系统面事件，
+  // receipt/model_trace 豁免（D31）——2026-09-19 真机复盘：/onboarding 走过一次即写入
+  // onboarding.welcome.progress(member)，旧白名单没有 member，geo 套件因此假失败。
+  /**
+   * 回执位口径（2026-09-19 真机复盘修订）：receipt 只对**已执行事件**（decision.after 非空）强制——
+   *   · 越围栏挂起（review/block）事件按设计没有回执：动作尚未发生，写回执反而是伪造回执；
+   *   · 已执行但无真实外部回执的步骤，运行时写 receipt.synced=false 标「未核实」（E3.7），
+   *     字段仍必须在位，好让下游区分「未核实」与「缺字段」；
+   *   · 只读步骤/模型降级通告（model.degraded）没有 after，天然落在本检查之外。
+   * 因此收敛为「已执行 → 五元必须齐」，不放宽已执行事件的回执纪律，也不把挂起当数据缺陷。
+   */
+  const bad = await q(`SELECT count(*) n FROM biz_events WHERE workspace_id=$1
+    AND payload->'decision'->'after' IS NOT NULL
+    AND COALESCE(payload->'object'->>'type','') <> ALL($2::text[])
+    AND (payload->>'who' IS NULL OR payload->>'object' IS NULL OR payload->>'decision' IS NULL OR payload->>'receipt' IS NULL OR payload->>'model_trace' IS NULL)`, [WS, [...SYSTEM_TYPES]]);
   assert(Number(bad.rows[0].n) === 0, `五元缺失 ${bad.rows[0].n} 条`);
 });
 e("事件 GEO 对象类型全部在对象模型内（系统对象豁免）", async () => {
-  const SYSTEM_TYPES = new Set(["thread", "task", "approval", "workspace", "conversation", "company_ceo", "client"]);
   const r = await q(`SELECT DISTINCT payload->'object'->>'type' t FROM biz_events WHERE workspace_id=$1`, [WS]);
   for (const row of r.rows) assert(objectTypes.has(row.t) || SYSTEM_TYPES.has(row.t), `事件对象 ${row.t} 未在对象模型`);
 });
 e("事件 who 全部在编制内（系统/人类豁免）", async () => {
-  const SYSTEM_ACTORS = new Set(["morning-briefing", "captain", "fleet", "im-channels"]);
+  // model-router = 平台模型路由组件（缺省/降级时写 model.degraded 留痕），与 captain/fleet 同属系统身份
+  const SYSTEM_ACTORS = new Set([
+    "morning-briefing", "captain", "fleet", "im-channels", "model-router",
+    // night-shift = 夜班调度器（night_runs / 决策包投递的留痕主体；2026-09-20 真机验收增补）
+    "night-shift",
+    // render-poller = 视频渲染轮询回填器（Seedance 异步任务第二步的留痕主体；2026-09-20 真机测试增补）
+    "render-poller",
+    // render-operator = 渲染提交的生成池计量主体（gen.degraded / 提交留痕；2026-09-20 真机测试增补）
+    "render-operator",
+  ]);
   const r = await q(`SELECT DISTINCT payload->'who'->>'id' id FROM biz_events WHERE workspace_id=$1`, [WS]);
   for (const row of r.rows) assert(presetKeys.has(row.id) || SYSTEM_ACTORS.has(row.id) || String(row.id).startsWith("MEM-"), `who=${row.id} 不在编制`);
 });
 e("rule_impact 引用的规则存在且级别一致", async () => {
   const r = await q(`SELECT DISTINCT ri->>'rule_id' rid, ri->>'result' res FROM biz_events, jsonb_array_elements(payload->'rule_impact') ri WHERE workspace_id=$1`, [WS]);
   for (const row of r.rows) {
-    const rule = fenceRules.find(x => x.rule_id === row.rid);
+    const rule = allFenceRules.find(x => x.rule_id === row.rid);
     assert(rule, `rule_impact 引用未知规则 ${row.rid}`);
     assert(["pass", "review", "blocked"].includes(row.res), `${row.rid} 非法 result=${row.res}`);
   }

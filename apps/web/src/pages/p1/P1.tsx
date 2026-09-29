@@ -1,6 +1,8 @@
 /**
  * P1 工作台·工作台（F3：真实 API 接线版；PRD P1-①②③ 逐条对账）
- *  - 左栏 ConversationList：📌 置顶（夜班中心频道/昨夜日报）+ 待办（审批请求 badge）+ 任务线程（状态点实时）+ 问答
+ *  - 左栏 ConversationList：📌 置顶（夜班中心频道/昨夜日报）+ 任务线程（状态点实时）+ 问答
+ *    2026-09-21 产品所有者口径（本机单人运行）：基座通用审批环节已移除，左栏不再汇总审批请求；
+ *    业务链路自带的关卡（如视频管线 G1–G10、定妆照确认）在各自业务页面就地放行。
  *  - 中栏 MessageFlow：系统分隔线 → 交接班卡（P1E3，三计数与 P3 强一致 F4.4）→ 基座运行指标
  *    → 巡检雷达推送（P1E4，一键派单接 inspection.dispatch；无异常显「昨夜一切正常」）
  *  - 右栏：档案 chips / 夜班班组状态卡 / 在线成员人机混编（P1E6）/ 渠道巡检状态
@@ -10,13 +12,12 @@
  * 演示走查：?demo=p1_loading|p1_empty|p1_community 强制状态态（仅演示，数据接线不变）
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { ensureDemoLogin, trpc } from "../../lib/trpc";
 import { Bridge } from "../../shell/Bridge";
 import {
   AgentActionMessage,
   BannerAlert,
-  DispatchBar,
   EmptyState,
   HandoffCard,
   KpiGauge,
@@ -45,6 +46,7 @@ const THREAD_DOT: Record<string, string> = {
 };
 
 export default function P1() {
+  const navigate = useNavigate();
   const { entries, subject, plan: accessPlan, capabilities, canAction } = useNavigationAccess();
   const [params] = useSearchParams();
   const demo = params.get("demo"); // 演示走查强制态（数据接线不变）
@@ -54,7 +56,6 @@ export default function P1() {
   const [threads, setThreads] = useState<ThreadRow[]>([]);
   const [night, setNight] = useState<{ configured: boolean; run?: { id: string; status: string; fenceSnapshot: string | null; stats: { done: number; pending: number; need_human: number; credits_used: number } | null } } | null>(null);
   const [insp, setInsp] = useState<{ lastRunAt: string | null; totalChecks: number; okCount: number; attention: Array<{ eventId: string; severity: string; summary: string; objectType: string; objectId?: string }> } | null>(null);
-  const [pendingCount, setPendingCount] = useState(0);
   const [profile, setProfile] = useState<ProfileResp | null>(null);
   const [agents, setAgents] = useState<Array<{ preset_key: string; name: string; version: string; kind: string; status: string }>>([]);
   const [members, setMembers] = useState<Array<{ memberNo: string; name: string; role: string }>>([]);
@@ -65,10 +66,6 @@ export default function P1() {
   })), [agents]);
 
   // 派遣栏状态（P1E1）
-  const [draft, setDraft] = useState("");
-  const [dispatchState, setDispatchState] = useState<"empty" | "typing" | "routing">("empty");
-  const [clarify, setClarify] = useState<string | null>(null);
-  const canViewInbox = entries.some((entry) => entry.route === "/inbox");
   const canViewNight = entries.some((entry) => entry.route === "/night");
   const canViewMembers = entries.some((entry) => entry.route === "/members");
   const canInspect = capabilities.inspection !== false;
@@ -77,17 +74,16 @@ export default function P1() {
   const load = useCallback(async () => {
     try {
       await ensureDemoLogin();
-      const [th, ni, ins, ap, prof, ag, mb] = await Promise.all([
+      const [th, ni, ins, prof, ag, mb] = await Promise.all([
         trpc.threads.list.query() as Promise<ThreadRow[]>,
         canViewNight ? trpc.nightShift.current.query() as Promise<typeof night> : Promise.resolve(null),
         canInspect ? trpc.inspection.status.query() as Promise<typeof insp> : Promise.resolve(null),
-        canViewInbox ? trpc.approvals.list.query({ status: "pending" }) as Promise<unknown[]> : Promise.resolve([]),
         trpc.workspace.profile.query() as Promise<ProfileResp>,
         trpc.workspace.agents.query() as Promise<typeof agents>,
         canViewMembers ? trpc.members.list.query() as Promise<typeof members> : Promise.resolve([]),
       ]);
       setThreads(th); setNight(ni); setInsp(ins);
-      setPendingCount(ap.length); setProfile(prof); setAgents(ag ?? []); setMembers(mb ?? []);
+      setProfile(prof); setAgents(ag ?? []); setMembers(mb ?? []);
       setError(null);
     } catch (e) {
       console.error("工作台加载失败", e);
@@ -95,7 +91,7 @@ export default function P1() {
     } finally {
       setReady(true);
     }
-  }, [canInspect, canViewInbox, canViewMembers, canViewNight]);
+  }, [canInspect, canViewMembers, canViewNight]);
 
   useEffect(() => {
     void load();
@@ -105,10 +101,9 @@ export default function P1() {
     }, 5000);
     const t2 = setInterval(() => { // 其余 10s（D6）
       if (canInspect) trpc.inspection.status.query().then((r) => setInsp(r as typeof insp)).catch(() => undefined);
-      if (canViewInbox) trpc.approvals.list.query({ status: "pending" }).then((r) => setPendingCount((r as unknown[]).length)).catch(() => undefined);
     }, 10000);
     return () => { clearInterval(t1); clearInterval(t2); };
-  }, [canInspect, canViewInbox, canViewNight, load]);
+  }, [canInspect, canViewNight, load]);
 
   /* ---------- 派生状态 ---------- */
   const plan = demo === "p1_community" ? "community" : (accessPlan ?? "community");
@@ -123,76 +118,56 @@ export default function P1() {
   const kpis = useMemo(() => {
     return [
       { name: "进行中任务", value: `${threads.filter((thread) => thread.status === "running" || thread.status === "queued").length} 项` },
-      { name: "待人工决策", value: `${pendingCount} 项` },
+      { name: "已完成任务", value: `${threads.filter((thread) => thread.status === "completed").length} 项` },
       { name: "巡检正常项", value: insp ? `${insp.okCount}/${insp.totalChecks}` : "—" },
       { name: "可用数字员工", value: `${agents.filter((agent) => agent.status === "ready").length} 位` },
     ];
-  }, [agents, insp, pendingCount, threads]);
+  }, [agents, insp, threads]);
   const metricsAsOf = new Date().toTimeString().slice(0, 5);
 
-  /* ---------- 派遣（P1E1：含糊→反问不建任务 F3.2；成功→完成后态新线程顶部 0/y 蓝呼吸 F3.4） ---------- */
-  const dispatch = useCallback(async (text: string, presetKey?: string) => {
-    if (!canDispatch || !text.trim()) return;
-    const selectedAgent = presetKey ?? agents[0]?.preset_key;
-    if (!selectedAgent) {
-      setError("当前没有可接单的数字员工，请先在团队中心完成装配。");
-      return;
-    }
-    setDispatchState("routing");
-    setClarify(null);
-    try {
-      const r = await trpc.threads.dispatch.mutate({
-        title: text.trim(),
-        presetKey: selectedAgent,
-      });
-      if (r.kind === "clarify") {
-        setClarify(clientChineseText(r.question, "请补充目标与时间")); // 反问澄清，不留任务
-      } else {
-        setDraft("");
-        await load(); // 完成后态：新线程出现列表顶部
-      }
-    } catch (e) {
-      console.error("工作台派遣失败", e);
-      setError("任务暂时无法派发，请稍后重试；系统没有创建任务。");
-    } finally {
-      // #18 修复：用 text.trim() 判断而非闭包旧值 draft（setDraft 异步，闭包内 draft 未更新）
-      setDispatchState(text.trim() ? "typing" : "empty");
-    }
-  }, [agents, canDispatch, load]);
+  /**
+   * 派遣入口（三合一 2026-09-20）：页面不再自带输入框——快捷目标与自定义目标
+   * 统一交给右侧「织伴」全局框（问/派/留言/推进 四落点在同一处），本页只负责把
+   * 目标与岗位送过去，并在任务列表刷新时呈现结果。
+   */
+  const openDispatchInRail = useCallback((text?: string, presetKey?: string) => {
+    window.dispatchEvent(new CustomEvent("workloom:assistant-intent", {
+      detail: { intent: "task", ...(text ? { presetText: text } : {}), ...(presetKey ? { presetKey } : {}) },
+    }));
+  }, []);
 
   /* ---------- 状态变体 ---------- */
   const isLoading = demo === "p1_loading" || !ready;
-  const isEmpty = demo === "p1_empty" || (ready && threads.length === 0 && pendingCount === 0 && (insp?.attention.length ?? 0) === 0);
+  const isEmpty = demo === "p1_empty" || (ready && threads.length === 0 && (insp?.attention.length ?? 0) === 0);
 
   /* ---------- 左栏：会话列表（分组渲染） ---------- */
   const left = (
     <>
       <div className="mb-2 px-1 text-body tracking-[.2em] text-ink3">任务会话</div>
       {!isCommunity && canViewNight && nightConfigured && (
-        <div className="mb-1.5 cursor-pointer rounded-lg border border-holo/35 bg-holo/5 px-3 py-2.5">
+        <button
+          type="button"
+          onClick={() => navigate("/night")}
+          className="mb-1.5 w-full cursor-pointer rounded-lg border border-holo/35 bg-holo/5 px-3 py-2.5 text-left"
+        >
           <div className="flex items-center justify-between">
             <span className="inline-flex items-center gap-1 text-body text-holo"><Icon name="pin" size={13} />夜班中心频道</span>
             <span className={`inline-block h-1.5 w-1.5 rounded-full ${night?.run?.status === "running" ? "bg-holo animate-pulse-hud" : "bg-ink3"}`} />
           </div>
           <div className="mt-0.5 text-body text-ink2">夜班班组实时协作</div>
-        </div>
+        </button>
       )}
       {canViewNight && nightConfigured && night?.run?.stats && (
-        <div className="mb-1.5 cursor-pointer rounded-lg border border-gline bg-gold/5 px-3 py-2.5">
+        <button
+          type="button"
+          onClick={() => navigate("/reports")}
+          className="mb-1.5 w-full cursor-pointer rounded-lg border border-gline bg-gold/5 px-3 py-2.5 text-left"
+        >
           <div className="inline-flex items-center gap-1 text-body text-gold"><Icon name="pin" size={13} />昨夜日报</div>
           <div className="mt-0.5 text-body text-ink2">
-            完成 {night.run.stats.done} · 待审批 {night.run.stats.pending} · 求援 {night.run.stats.need_human}
+            完成 {night.run.stats.done} · 求援 {night.run.stats.need_human}
           </div>
-        </div>
-      )}
-      {canViewInbox && pendingCount > 0 && (
-        <div className="mb-1.5 cursor-pointer rounded-lg border border-warn/40 bg-warn/5 px-3 py-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-body text-warn">待办 · 审批请求</span>
-            <span className="rounded-full bg-warn/15 px-1.5 font-orb text-body font-bold text-warn">{pendingCount}</span>
-          </div>
-          <div className="mt-0.5 text-body text-ink2">请到审批中心处理</div>
-        </div>
+        </button>
       )}
       <div className="mt-3 mb-2 px-1 text-body tracking-[.2em] text-ink3">任务线程 · 最多 10 项并行</div>
       {threads.map((t) => (
@@ -237,8 +212,9 @@ export default function P1() {
       {!isCommunity && canViewNight && (
         <div className="mb-3 rounded-lg border border-line bg-card p-3">
           <div className="mb-1.5 text-body font-bold text-holo">夜班中心</div>
-          <NightStatusPill state={pillState} window="22:00–08:00" onClick={() => { window.location.href = "/night"; }} />
-          {night?.run?.fenceSnapshot && <div className="mt-1.5 text-body text-ink3">安全规则已锁定并留痕</div>}
+          {/* 站内跳转统一走 SPA 路由：window.location 会整页刷新，丢掉当前工作台状态 */}
+          <NightStatusPill state={pillState} window="22:00–08:00" onClick={() => navigate("/night")} />
+          {night?.run?.fenceSnapshot && <div className="mt-1.5 text-body text-ink3">围栏配置已锁定并留痕</div>}
         </div>
       )}
       {/* 在线成员（人机混编 P1E6） */}
@@ -317,7 +293,7 @@ export default function P1() {
                   data={{
                     deliveredAt: "08:30",
                     fenceSnapshot: night.run.fenceSnapshot ? "配置已锁定" : "—",
-                    done: night.run.stats.done, pending: night.run.stats.pending,
+                    done: night.run.stats.done,
                     needHuman: night.run.stats.need_human, credits: night.run.stats.credits_used,
                   }}
                 />
@@ -378,16 +354,7 @@ export default function P1() {
           </div>
         )}
 
-        {/* 反问澄清条（F3.2：含糊指令不建任务） */}
-        {clarify && (
-          <div className="mt-3">
-            <BannerAlert level="info" actionLabel="知道了" onAction={() => setClarify(null)}>
-              任务待确认（未建任务）：{clarify}
-            </BannerAlert>
-          </div>
-        )}
-
-        {/* 底部航线设定台（P1E1）+ 快捷目标（P1E7；社区版隐藏 Quest 类 F7.2） */}
+        {/* 派遣入口（三合一：输入统一走右侧「织伴」全局框）+ 快捷目标（P1E7） */}
         <div className="mt-4 space-y-2">
           {canDispatch && !isCommunity && (
             <div className="flex flex-wrap gap-1.5">
@@ -395,7 +362,7 @@ export default function P1() {
                 <button
                   key={g.label}
                   type="button"
-                  onClick={() => void dispatch(g.text, g.preset)}
+                  onClick={() => openDispatchInRail(g.text, g.preset)}
                   className="cursor-pointer rounded-md border border-line bg-card px-2.5 py-1 text-body text-ink2 transition-colors hover:border-gline hover:text-gold"
                 >
                   <Icon name="lightning" size={13} className="inline" /> {g.label}
@@ -403,14 +370,15 @@ export default function P1() {
               ))}
             </div>
           )}
-          {canDispatch && <DispatchBar
-            state={dispatchState}
-            value={draft}
-            chips={[profile?.name ?? "当前工作区", `阶段：${clientValueText(profile?.stage)}`]}
-            onCancelRoute={() => setDispatchState(draft ? "typing" : "empty")}
-            onChange={(v) => { setDraft(v); setDispatchState(v ? "typing" : "empty"); }}
-            onSubmit={() => void dispatch(draft)}
-          />}
+          {canDispatch && (
+            <button
+              type="button"
+              onClick={() => openDispatchInRail()}
+              className="w-full rounded-lg border border-gline bg-card px-4 py-2.5 text-left text-body text-ink3 hover:text-gold"
+            >
+              说出目标派活……（统一走右侧「织伴」全局框 · 提问 / 派活 / 留言 · ⌘K）
+            </button>
+          )}
         </div>
       </div>
     </Bridge>

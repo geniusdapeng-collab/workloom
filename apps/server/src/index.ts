@@ -8,10 +8,14 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { cors } from "hono/cors";
-import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { once } from "node:events";
+import { createWriteStream, existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, extname, join } from "node:path";
 import { appRouter } from "./trpc/router.js";
 import { createContext } from "./trpc/context.js";
 import { serviceGateway } from "./service/gateway.js";
@@ -19,12 +23,19 @@ import { getOwnerPool, getAppPool, getGatewayPool } from "@workloom/db";
 import { bundlesRoot } from "@workloom/base/bundles";
 import { registerFeedbackEnumsFromDisk } from "@workloom/base/evolve";
 import { startSkillDistAutoSync, buildManifest, receiveReflux, type RefluxPayload } from "@workloom/base/skill-ops";
-import { createHash } from "node:crypto";
+import { resolveMediaPath, verifyMediaToken } from "./video/gen/ingest.js";
+import { mediaRoot } from "./video/gen/ingest.js";
+import { safeExtOf, uploadMaxBytes, uploadRelPath, verifyUploadTicket } from "./video/media/upload.js";
+import { changesSince, applyPush, syncEnabled, verifyDeviceRequest } from "./video/media/sync.js";
+import { scopedQuery } from "./video/gen/db.js";
+import { mediaUrl } from "./video/gen/ingest.js";
 import { startThreadScheduler } from "./runtime/scheduler.js";
 import { gatewayAppend } from "@workloom/base/workdata";
 import { registerBundleAskFacts } from "./runtime/ask-facts-loader.js";
-import { readVoiceFile, synthesizeVoice, voiceStationConfig } from "./voice/station.js";
+import { registerAskKbSearch } from "@workloom/runtime";
+import { searchKB } from "./service/kb.js";
 
+import { readVoiceFile, synthesizeVoice, voiceStationConfig } from "./voice/station.js";
 const app = new Hono();
 
 app.use(
@@ -46,7 +57,7 @@ app.use(
 app.get("/health", (c) => c.json({ ok: true, service: "workloom-im-server" }));
 
 /**
- * 本机克隆音色（小织/织伴的默认音色）
+ * 本机克隆音色（小织/织伴的默认音色）[VOICE-DEFAULT]
  *  - GET /api/voice/status → 工位是否就绪（客户端据此决定是否走克隆音色，不探测就不猜）
  *  - GET /api/voice/speech?text=…&profile=… → 返回 wav；工位不可达/未配置一律 503，
  *    客户端按契约回落到系统女声并锁定同一音色（宁可换声线，也不让播报消失）。
@@ -133,6 +144,161 @@ const port = Number(process.env.SERVER_PORT ?? 8787);
 /** C 端公开网关（AI 服务前台；独立于员工 tRPC，c-token 鉴权 + 限流） */
 app.route("/c", serviceGateway);
 
+/**
+ * 成片媒体库通道（T-2026-0921-0002）：HMAC 签名 + 过期时间，防目录穿越。
+ * 为什么不做裸静态目录：成片是客户资产，必须带鉴权（签名即鉴权，短 TTL，不落 cookie）。
+ */
+const MEDIA_MIME: Record<string, string> = {
+  ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime",
+  ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
+};
+app.get("/media/*", async (c) => {
+  const raw = c.req.path.replace(/^\/media\//, "");
+  let relPath: string;
+  try {
+    relPath = decodeURIComponent(raw);
+  } catch {
+    return c.json({ error: "MEDIA_PATH_INVALID" }, 400);
+  }
+  const verdict = verifyMediaToken(relPath, c.req.query("token") ?? "");
+  if (!verdict.ok) return c.json({ error: "MEDIA_TOKEN_INVALID", reason: verdict.reason }, 403);
+  let abs: string;
+  try {
+    abs = resolveMediaPath(relPath);
+  } catch {
+    return c.json({ error: "MEDIA_PATH_INVALID" }, 400);
+  }
+  if (!existsSync(abs)) return c.json({ error: "MEDIA_NOT_FOUND" }, 404);
+  const buf = await readFile(abs);
+  return new Response(buf, {
+    headers: {
+      "content-type": MEDIA_MIME[extname(abs).toLowerCase()] ?? "application/octet-stream",
+      "cache-control": "private, max-age=300",
+    },
+  });
+});
+
+/**
+ * 上传流水（T-2026-0926-0007 规格书 §3.5 第②步）：Hono 原生流式，不经 tRPC。
+ * 鉴权靠 `uploadTicket` 签发的 10 分钟 HMAC 凭证（载荷含 workspaceId/filename/maxBytes 且全字段进签名）；
+ * 边写边算 sha256，超限即中止并删半成品。落盘位置 `upload/<ws>/<sha256><ext>`，与入库口径一致。
+ */
+app.post("/media/upload", async (c) => {
+  const verdict = verifyUploadTicket(c.req.query("token") ?? "");
+  if (!verdict.ok) return c.json({ error: verdict.reason }, 403);
+  const maxBytes = Math.min(verdict.maxBytes, uploadMaxBytes());
+  const tmpDir = join(mediaRoot(), ".upload-tmp");
+  mkdirSync(tmpDir, { recursive: true });
+  const tmp = join(tmpDir, `${verdict.nonce}.part`);
+  const hash = createHash("sha256");
+  const stream = createWriteStream(tmp);
+  let bytes = 0;
+  try {
+    for await (const chunk of c.req.raw.body as unknown as AsyncIterable<Uint8Array>) {
+      bytes += chunk.byteLength;
+      if (bytes > maxBytes) {
+        stream.destroy();
+        rmSync(tmp, { force: true });
+        return c.json({ error: "UPLOAD_TOO_LARGE", maxBytes }, 413);
+      }
+      hash.update(chunk);
+      if (!stream.write(Buffer.from(chunk))) await once(stream, "drain");
+    }
+    await new Promise<void>((resolve) => stream.end(() => resolve()));
+  } catch (err) {
+    stream.destroy();
+    rmSync(tmp, { force: true });
+    return c.json({ error: "UPLOAD_FAILED", message: err instanceof Error ? err.message : String(err) }, 500);
+  }
+  if (bytes === 0) {
+    rmSync(tmp, { force: true });
+    return c.json({ error: "UPLOAD_EMPTY" }, 400);
+  }
+  const sha256 = hash.digest("hex");
+  const relPath = uploadRelPath(verdict.workspaceId, sha256, `${verdict.nonce}${safeExtOf(verdict.filename)}`);
+  const abs = join(mediaRoot(), relPath);
+  mkdirSync(dirname(abs), { recursive: true });
+  renameSync(tmp, abs);
+  return c.json({ sha256, relPath, bytes, filename: verdict.filename, expiresAt: new Date(verdict.exp * 1000).toISOString() });
+});
+
+/**
+ * 云端同步通道（T-2026-0926-0009）：设备级 HMAC 鉴权（`x-workloom-device/timestamp/signature`）。
+ * 只在 `WORKLOOM_CLOUD_SYNC=1` 时挂载——未开启部署形态下这些路径根本不存在（不暴露半开的同步面）。
+ */
+if (syncEnabled()) {
+  const bodyOf = async (c: Context): Promise<string> => {
+    try {
+      return await c.req.text();
+    } catch {
+      return "";
+    }
+  };
+  const auth = async (c: Context, body: string, method: string, path: string) => {
+    return verifyDeviceRequest(getOwnerPool(), {
+      deviceId: c.req.header("x-workloom-device") ?? "",
+      timestamp: c.req.header("x-workloom-timestamp") ?? "",
+      signature: c.req.header("x-workloom-signature") ?? "",
+      method,
+      path,
+      body,
+    });
+  };
+  /**
+   * 签名覆盖 **路径 + 查询串**（`c.req.path` 不含 query）：否则同一路径的签名
+   * 可被换成 `since=`/`limit=` 复用，等于把"这一请求"降级成"这一端点"。
+   */
+  const signedPathOf = (c: Context): string => {
+    const url = new URL(c.req.url);
+    return `${url.pathname}${url.search}`;
+  };
+
+  app.get("/sync/media/pull", async (c) => {
+    const verdict = await auth(c, "", "GET", signedPathOf(c));
+    if (!verdict.ok || !verdict.scope) return c.json({ error: verdict.code ?? "DEVICE_UNAUTHORIZED" }, 403);
+    const since = c.req.query("since") ?? null;
+    const limit = Number(c.req.query("limit") ?? 500);
+    const payload = await changesSince(getAppPool(), verdict.scope, {
+      since, limit: Number.isFinite(limit) ? limit : 500,
+    });
+    return c.json({ ...payload, device: verdict.deviceLabel ?? null });
+  });
+
+  app.post("/sync/media/push", async (c) => {
+    const declared = Number(c.req.header("content-length") ?? 0);
+    const maxBytes = Number(process.env.MEDIA_SYNC_PUSH_MAX_MB ?? 8) * 1024 * 1024;
+    if (Number.isFinite(declared) && declared > maxBytes) {
+      return c.json({ error: "SYNC_PUSH_TOO_LARGE", maxBytes }, 413);
+    }
+    const body = await bodyOf(c);
+    if (body.length > maxBytes) return c.json({ error: "SYNC_PUSH_TOO_LARGE", maxBytes }, 413);
+    const verdict = await auth(c, body, "POST", signedPathOf(c));
+    if (!verdict.ok || !verdict.scope) return c.json({ error: verdict.code ?? "DEVICE_UNAUTHORIZED" }, 403);
+    let payload: unknown;
+    try {
+      payload = JSON.parse(body || "{}");
+    } catch {
+      return c.json({ error: "SYNC_BODY_INVALID_JSON" }, 400);
+    }
+    const result = await applyPush(getAppPool(), verdict.scope, payload as never, verdict.deviceLabel ?? "device");
+    return c.json(result);
+  });
+
+  app.get("/sync/media/url", async (c) => {
+    const verdict = await auth(c, "", "GET", signedPathOf(c));
+    if (!verdict.ok || !verdict.scope) return c.json({ error: verdict.code ?? "DEVICE_UNAUTHORIZED" }, 403);
+    const assetId = c.req.query("assetId") ?? "";
+    if (!assetId) return c.json({ error: "ASSET_ID_REQUIRED" }, 400);
+    const rows = await scopedQuery<{ local_path: string | null }>(getAppPool(), verdict.scope,
+      `SELECT meta->>'localPath' AS local_path FROM video_assets WHERE workspace_id = $1 AND id = $2`,
+      [verdict.scope.workspaceId, assetId]);
+    const localPath = rows[0]?.local_path ?? null;
+    if (!localPath) return c.json({ error: "ASSET_FILE_NOT_ON_CLOUD" }, 404);
+    return c.json({ url: mediaUrl(localPath, 3600), expiresInSec: 3600 });
+  });
+  console.log("云端媒资同步通道已挂载：GET /sync/media/pull · POST /sync/media/push · GET /sync/media/url");
+}
+
 /** 官方运营台 HTTP 端点（仅 SKILL_OPS_MODE=official 部署挂载）：
  *  GET  /skill-dist/manifest.json —— 客户端拉取通道（分发包逐一官方签名，客户端 staging① 验签）
  *  POST /skill-ops/reflux        —— 客户回流接收（HMAC 验签，正文即客户预览的「所发」） */
@@ -184,7 +350,21 @@ serve({ fetch: app.fetch, port, hostname: host }, (info) => {
    */
   startThreadScheduler();
   /**
-   * GR-19：装载各行业 ask 事实面——不装的话，右侧对话框问领域问题只会得到
+   * A-05 修复：启动恢复补扫——「步骤审批已 approved 但线程停 pending_review」的僵尸线程。
+   * 此前审批通过的自动续跑是 setTimeout fire-and-forget，进程在回调执行前重启即永丢
+   * （调度器只扫 queued，不接 pending_review）。启动时统一补续跑，失败只记日志不阻塞启动。
+   */
+  void (async () => {
+    try {
+      const { resumeApprovedPendingThreads } = await import("./runtime/scheduler.js");
+      const n = await resumeApprovedPendingThreads();
+      if (n > 0) console.log(`[scheduler] 启动恢复：补续跑 ${n} 条「审批已通过但线程挂起」的僵尸线程`);
+    } catch (err) {
+      console.error("[scheduler] 启动恢复补扫失败（不阻塞启动）", err instanceof Error ? err.message : String(err));
+    }
+  })();
+  /**
+   * GR-19：装载各行业 ask 事实面（geo-growth 等）——不装的话，右侧对话框问领域问题只会得到
    * 底座通用事实（实测"问什么都是没有相关记录"）。失败不阻塞启动（回落通用事实面）。
    */
   void registerBundleAskFacts()
@@ -193,13 +373,18 @@ serve({ fetch: app.fetch, port, hostname: host }, (info) => {
     })
     .catch((err) => console.error("[ask-facts] 装载失败（不阻塞启动）", err instanceof Error ? err.message : String(err)));
   /**
-   * 注：X-04（客户知识库接进 ask 事实面）与行业规划器注册都不在这里——
-   * 它们要 import 行业仓保留资产（`service/kb.ts` / `industry/**`），而本文件属于
-   * **基座公共分发面**（sync/base-scope.json 的 include），公共面到行业资产之间
-   * 不允许新增跨域相对依赖（base-sync 依赖闭包门禁会 fail）。
-   * 两类接线改由行业仓保留的 `apps/server/src/trpc/router.ts` 在模块加载时注入，
-   * 见该文件底部的「启动期接线」段。
+   * X-04（第四轮实测）：把客户知识库检索接进 ask 事实面——此前知识库管道只建到"检索"为止，
+   * 客户上传的券后折扣/暗号/政策一个字都进不了答案。检索失败由 gatherFacts 吞掉并回落（不劣化）。
    */
+  registerAskKbSearch(async (scope, question, limit) => {
+    const hits = await searchKB({ workspaceId: scope.workspaceId, query: question, limit });
+    return hits.map((hit) => ({
+      content: hit.content,
+      ...(hit.heading ? { heading: hit.heading } : {}),
+      ...(hit.documentTitle ? { documentTitle: hit.documentTitle } : {}),
+      documentId: hit.documentId,
+    }));
+  });
 });
 
 // 技能保鲜环 · 夜班窗口自动同步（机制即自动，客户零操作）：

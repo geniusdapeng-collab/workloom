@@ -9,7 +9,7 @@
  * 扩展纪律：基座只保留公共术语；行业岗位、动作与字段显示名必须通过
  * 当前已验签 Bundle 的 terminology 投影注入，禁止在客户端追加行业词表。
  */
-import { clientChineseText, clientFieldLabel, clientStatusLabel, clientValueText, registerClientSafeTerms } from "@workloom/ui";
+import { clientChineseText, clientFieldLabel, clientStatusLabel, clientValueText } from "@workloom/ui";
 
 let DISPLAY_TERMINOLOGY: Readonly<Record<string, string>> = {};
 
@@ -18,71 +18,6 @@ export function hydrateDisplayTerminology(terminology: Record<string, string>): 
   DISPLAY_TERMINOLOGY = Object.freeze(Object.fromEntries(
     Object.entries(terminology).filter(([, value]) => clientChineseText(value, "") === value.trim()),
   ));
-}
-
-/**
- * 行业术语白名单随装配投影注入（`ui.safeTerms`）：行业通用缩写与品牌词在
- * 中文显示边界内放行，其它规则不变。切换身份/工作区时必须传空数组清空。
- */
-export function hydrateClientSafeTerms(terms: readonly string[] | undefined): void {
-  registerClientSafeTerms(terms ?? []);
-}
-
-/**
- * 剔除术语串里的拉丁技术记号（SOP / RPA / PRD / eval / gh API / v1 …）。
- * clientChineseText 遇到夹带技术记号的串会**整串回落**，技能名就会裸奔成
- * 「dev-dispatch」「prd-forge」这类内部 id（真机验收实测：基座技能中心 20 项里 13 项）。
- */
-function stripTechnicalTokens(value: string): string {
-  return value
-    .replace(/[A-Za-z][A-Za-z0-9._+/'-]*/g, " ")
-    .replace(/[\s·—–-]+/g, " ")
-    .trim();
-}
-
-/** 必须给中文名的场景：先按原串过词典（保留 GEO 这类词典认可的行业词），被拒再剔除记号重试 */
-export function chineseDisplayName(value: string | null | undefined, fallback: string): string {
-  const raw = (value ?? "").trim();
-  if (!raw) return fallback;
-  const kept = clientChineseText(raw, "");
-  if (kept) return kept;
-  const cleaned = stripTechnicalTokens(raw);
-  if (cleaned) {
-    const accepted = clientChineseText(cleaned, "");
-    if (accepted) return accepted;
-  }
-  return fallback;
-}
-
-/**
- * 技能展示名（Bundles 技能口径）：优先从技能说明首段解析中文名。
- * 首段分隔符覆盖行业写作习惯：。「」（）以及破折号「——」（ai-pm 技能大量用破折号）；
- * 首段夹带技术记号时先剔除再取，避免整串回落成裸 id。
- * 行业词表仍由各 Bundle 的技能正文提供，客户端不新增行业词汇（本文件顶部扩展纪律）。
- */
-export function skillDisplayName(name: string, description?: string | null): string {
-  const text = (description ?? "").trim();
-  if (text) {
-    const m = /^([^（(。：:—]{2,40})[（(。：:—]/.exec(text);
-    const candidate = m?.[1]?.trim();
-    if (candidate) {
-      const resolved = chineseDisplayName(candidate, "");
-      if (resolved) return resolved;
-    }
-    /**
-     * 长说明兜底（RDAS v3.0 实测：badcase-harvest / model-scout 首段 >40 字导致整串回落成裸 id）：
-     * 按句号/分号/破折号切第一段，再取第一个逗号前的短句；剔除技术记号与符号后必须是中文。
-     */
-    const first = text.split(/[。；;！!？?\n]|——/)[0]?.trim() ?? "";
-    const clause = (first.split(/[，,]/)[0] ?? first)
-      .replace(/[+/*#_|]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 32);
-    const resolved = clause ? chineseDisplayName(clause, "") : "";
-    if (resolved) return resolved;
-  }
-  return chineseDisplayName(name, name);
 }
 
 function projectedText(key: string): string | undefined {
@@ -102,6 +37,7 @@ export const TICKET_KIND_TEXT: Record<string, string> = {
   delivery: "送物服务",
   repair: "维修报修",
   complaint: "投诉建议",
+  consult: "合作咨询",
   other: "其他需求",
   service_request: "服务请求",
 };
@@ -132,23 +68,19 @@ export const SOURCE_KIND_TEXT: Record<string, string> = {
   manual: "手工录入",
 };
 
-// —— 审批域 ——
-export const APPROVAL_STATUS_TEXT: Record<string, string> = {
-  pending: "待审批",
-  approved: "已批准",
-  rejected: "已驳回",
-  edited: "已改派",
-  escalated: "已升级",
-};
-
+/**
+ * —— 业务关卡放行域 ——
+ * 基座通用审批环节已移除（2026-09-21 产品所有者口径，本机单人运行）；这里保留的是
+ * 业务链路自带关卡（如视频管线 G1–G10、定妆照确认）的放行手势文案。
+ */
 export const APPROVAL_GESTURE_TEXT: Readonly<Record<string, string>> = {
-  approve: "已批准",
-  edit: "已修改后批准",
-  reject: "已驳回",
+  approve: "已放行",
+  edit: "改后放行",
+  reject: "已退回",
 };
 
 export function approvalGestureText(value: string | null | undefined): string {
-  return value ? (APPROVAL_GESTURE_TEXT[value] ?? "审批已处理") : "审批已处理";
+  return value ? (APPROVAL_GESTURE_TEXT[value] ?? "关卡已处理") : "关卡已处理";
 }
 
 // —— 对话意图 ——
@@ -175,6 +107,7 @@ export const COMMON_STATUS_TEXT: Record<string, string> = {
   running: "进行中",
   completed: "已完成",
   failed: "已失败",
+  cancelled: "已驳回终止",
   draft: "草稿",
   submitted: "已提交",
   scheduled: "已排期",
@@ -186,7 +119,7 @@ export const COMMON_STATUS_TEXT: Record<string, string> = {
   blocked: "已隔离",
   pending: "待处理",
   pending_review: "待审查",
-  pending_approval: "待审批",
+  pending_approval: "待放行",
   expired: "已过期",
   rolled_back: "已回滚",
   ready: "就绪",
@@ -220,7 +153,7 @@ export const MODEL_WINDOW_TEXT: Record<string, string> = {
 export const MEMBER_ROLE_TEXT: Record<string, string> = {
   owner: "负责人",
   manager: "管理员",
-  approver: "审批人",
+  approver: "放行人",
   member: "成员",
   readonly: "只读成员",
   partner: "合作伙伴",
@@ -228,11 +161,11 @@ export const MEMBER_ROLE_TEXT: Record<string, string> = {
 
 export const OBJECT_TYPE_TEXT: Record<string, string> = {
   thread: "任务",
-  approval: "审批事项",
+  approval: "关卡事项",
   rule: "规则",
   member: "成员",
   agent: "数字员工",
-  memory: "组织经验",
+  memory: "组织记忆",
   ticket: "服务工单",
   workspace: "工作区",
 };
@@ -251,6 +184,57 @@ export function capabilityText(value: string): string {
   return CAPABILITY_TEXT[value] ?? "受限能力";
 }
 
+/**
+ * 剔除术语串里的拉丁技术记号（SOP / RPA / Brief / query / Y / v1 …）。
+ * 背景：clientChineseText 遇到夹带技术记号的串会**整串回落**，于是技能名会裸奔成
+ * 「comment-ops」或退化成「技能能力」——两者都是客户端可见的技术串。
+ */
+function stripTechnicalTokens(value: string): string {
+  return value
+    .replace(/[A-Za-z][A-Za-z0-9._+/-]*/g, " ")
+    .replace(/[\s·—–-]+/g, " ")
+    .trim();
+}
+
+/**
+ * 必须给中文名的场景（技能名等）：先按原串走词典（保留 GEO 这类词典认可的行业词），
+ * 被判定含技术记号时剔除拉丁记号再试一次，仍不可用才回落 fallback。
+ */
+export function chineseDisplayName(value: string | null | undefined, fallback: string): string {
+  const raw = (value ?? "").trim();
+  if (!raw) return fallback;
+  const kept = clientChineseText(raw, "");
+  if (kept) return kept;
+  const cleaned = stripTechnicalTokens(raw);
+  if (cleaned) {
+    const accepted = clientChineseText(cleaned, "");
+    if (accepted) return accepted;
+  }
+  return fallback;
+}
+
+/**
+ * 技能展示名（Bundles 技能口径）：优先从技能说明首段解析中文名
+ * （如「入住退房全流程套件。…」「GEO 六段式改写官方套件（随 bundles/geo-growth 分发）：…」），
+ * 未命中时回落 @workloom/ui 词典与原始 id。
+ * 首段里夹带技术记号（「评论三级分流 SOP 官方套件」「线索管家——四路承接应答留资 SOP」）
+ * 时先剔除记号再取中文名，避免整串回落成裸 id 上屏。
+ * 分隔符口径要覆盖行业写作习惯：破折号「——」也当名字结束符，否则
+ * 「团购券运营——通兑券/预售券 SKU 设计…」「意图雷达——竞对评论区/OTA差评…」这类
+ * 没有句号/冒号的说明会解析不出名字，直接裸奔英文 id（真机验收发现的 2 例）。
+ * 行业词表仍由各 Bundle 的技能正文提供，客户端不新增行业词汇（display.ts 顶部扩展纪律）。
+ */
+export function skillDisplayName(name: string, description?: string | null): string {
+  const text = (description ?? "").trim();
+  const m = /^([^（(。：:—]{2,40})[（(。：:—]/.exec(text);
+  const candidate = m?.[1]?.trim();
+  if (candidate) {
+    const resolved = chineseDisplayName(candidate, "");
+    if (resolved) return resolved;
+  }
+  return chineseDisplayName(name, name);
+}
+
 // —— 线程模式 ——
 export const THREAD_MODE_TEXT: Record<string, string> = {
   quest: "主线任务",
@@ -260,7 +244,7 @@ export const THREAD_MODE_TEXT: Record<string, string> = {
 
 /** 动作码 → 中文（底座通用域） */
 export const ACTION_TEXT: Record<string, string> = {
-  "memory.upsert": "更新组织经验",
+  "memory.upsert": "更新组织记忆",
   // 夜班
   "night.note": "夜班记录",
   "night.package": "生成夜班日报",
@@ -296,7 +280,7 @@ const ACTION_PART_TEXT: Record<string, string> = {
   complete: "办结",
   escalate: "升级",
   submit: "提交",
-  approve: "审批",
+  approve: "放行",
   publish: "发布",
   update: "更新",
   confirm: "确认",
@@ -404,6 +388,10 @@ export const ACTOR_TEXT: Record<string, string> = {
   system: "系统",
   "night-shift": "夜班中心",
   "morning-briefing": "夜班晨报",
+  // 2026-09-20 补录：渲染链路与模型路由的系统身份（否则字幕条落"系统成员"泛称）
+  "render-poller": "渲染轮询",
+  "render-operator": "渲染工位",
+  "model-router": "模型路由",
 };
 
 /**
@@ -425,13 +413,22 @@ export function actorText(id: string): string {
 /** 夜班/运营高频动作码补录（F-CN1） */
 export const ACTION_OPS_TEXT: Record<string, string> = {
   // 基座公共动作码；行业动作从 Bundle 术语投影读取。
-  "approval.gesture": "审批手势",
+  "approval.gesture": "关卡手势",
   "ask.answer": "问询应答",
   "memory.consolidate": "记忆整理",
   "night.package.deliver": "夜班日报投递",
   "night.run.start": "夜班开始",
   "strategy.memo": "策略备忘",
   "thread.dispatch": "任务派发",
+  // 2026-09-20 三合一真机测试补录：渲染/模型/线程留言三类**基座公共动作**
+  // （render router 与 model-router 属基座；thread.note 为统一对话框新增的通用留言动作）。
+  // 行业专有动作码仍由 Bundle 术语投影提供，不在此堆行业词。
+  "render.submit": "提交渲染",
+  "render.complete": "渲染完成",
+  "render.failed": "渲染失败",
+  "thread.note": "任务留言",
+  "model.call": "模型调用",
+  "model.degraded": "模型降级",
   // 裸词别名（历史数据兼容）
   send: "发送",
   answer: "即时应答",
@@ -473,22 +470,4 @@ function payloadValueText(value: unknown, depth = 0): string {
 export function payloadText(after: unknown, maxLen = 160): string {
   if (after == null) return "";
   return payloadValueText(after).slice(0, maxLen);
-}
-
-/**
- * 数字职场「头顶气泡」文案（D25）：服务端的 statusLine 形如
- * 「最近：competitor.fetch」「请示待裁：price.adjust」，前缀是中文状态、
- * 后半段是内部动作码。动作码必须先经动作字典，否则中文显示边界会把整句
- * 回落成「当前状态待确认」（RDAS 实测：职场气泡 5/11 位员工不可读）。
- */
-const FLOOR_STATUS_PREFIX = /^(请示待裁|遇阻|刚完成|最近)：(.+)$/;
-
-export function floorStatusText(line: string | null | undefined, fallback: string): string {
-  const raw = (line ?? "").trim();
-  if (!raw) return fallback;
-  const matched = FLOOR_STATUS_PREFIX.exec(raw);
-  if (matched?.[1] && matched[2]) {
-    return `${matched[1]}：${actionText(matched[2].trim())}`;
-  }
-  return clientChineseText(raw, fallback);
 }

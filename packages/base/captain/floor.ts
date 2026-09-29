@@ -9,7 +9,7 @@
  *  - celebrating  近 10 分钟线程完成/夜班包生成事件关联该员工（前端 3s 彩带后回位）
  *  - collab       近 10 分钟跨员工交接（write_back/转派）——β 批次走位动画，本批归并 working
  *  - idle         无任务待命（休息角）；disabled 工位清空名牌变灰
- * 优先级：blocked > asking（与 celebrating 共存：状态保持 asking，另带 celebrating 标志与双信息气泡）> celebrating > working > queued > idle
+ * 优先级：blocked > asking（与 celebrating 共存：状态 asking + celebrating 标志 + 双信息气泡）> celebrating > working > queued > idle
  *
  * 场景包：声明式 JSON（地板网格/工位锚点/道具/CEO 指挥台/休息角/入口/主题色），
  * 行业包经 registerFloorSceneProvider() 或 bundles/<industry>/floor-scene.json 覆盖；
@@ -32,7 +32,7 @@ export interface FloorAgent {
   currentThread: { id: string; title: string } | null;
   pendingTier: string | null;    // asking 时：l2_captain/l3_fleet/l4_chairman
   approvalId: string | null;     // asking 时：审批单号（原地三手势用）
-  /** 近 10 分钟内该员工刚完成过任务（与 asking 共存：请示仍为主态，庆祝作为附加信号） */
+  /** 近 10 分钟内该员工刚完成过任务（与 asking 共存：请示仍为主态，庆祝作为附加信号，UI 可同屏渲染） */
   celebrating?: boolean;
   statusLine: string;            // 头顶气泡一句话（最近动作中文摘要）
 }
@@ -243,9 +243,9 @@ export async function deriveFloor(app: pg.Pool, scope: Scope, scene: FloorScene)
        * 点击仍能直达审批（不丢信息，也不压正反馈）。
        */
       /**
-       * X-05：刚完成（近 10 分钟）与请示共存时**不再互相压制**——
-       * 状态仍为 asking（审批必须显眼、可直达、可被门禁断言），另带 celebrating 标志与"刚完成"气泡，
-       * 前端据此同时渲染庆祝与举手（既不让队列堆积吃掉正反馈，也不让庆祝淹没待审）。
+       * X-05 最终口径（与基座对齐）：请示与庆祝**共存**——状态保持 asking
+       * （审批显眼、可直达、门禁可断言），另带 celebrating 标志与「刚完成」气泡；
+       * 既不让队列堆积吃掉正反馈，也不让庆祝淹没待审。
        */
       if (ask) {
         out.push({

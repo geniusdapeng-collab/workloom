@@ -64,7 +64,6 @@ export default function P9() {
   const [configured, setConfigured] = useState(false);
   const [events, setEvents] = useState<Ev[]>([]);
   const [agents, setAgents] = useState<Array<{ preset_key: string; name: string; version: string; status: string }>>([]);
-  const [note, setNote] = useState("");
   const [banner, setBanner] = useState<{ level: "alert" | "warn" | "info"; text: string } | null>(null);
   const [pauseInfo, setPauseInfo] = useState<{ elapsedMs: number; withinSla: boolean } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -155,22 +154,13 @@ export default function P9() {
     }
   }, [run, busy, load]);
 
-  const sendNote = useCallback(async () => {
-    if (!note.trim() || busy) return;
-    setBusy("note");
-    setActionError("");
-    try {
-      const result = await trpc.nightShift.note.mutate({ text: note.trim() }) as { eventId: string };
-      setNote("");
-      await load(true);
-      setBanner({ level: "info", text: `留言已写入事件账本（${shortId(result.eventId)}）。` });
-    } catch (error) {
-      console.warn("提交夜班留言失败", error);
-      setActionError(operationFailure(error, "留言提交"));
-    } finally {
-      setBusy(null);
-    }
-  }, [note, busy, load]);
+  /**
+   * 三合一合并（2026-09-20）：夜班频道的底部输入框下线，留言统一走右侧全局框。
+   * 这里只负责把用户送进全局框并预置「留言」落点（页面不再自带第二个输入框）。
+   */
+  const openNoteInRail = useCallback(() => {
+    window.dispatchEvent(new CustomEvent("workloom:assistant-intent", { detail: { intent: "note" } }));
+  }, []);
 
   const dispatchAlert = useCallback(async (eventId: string, presetKey: string) => {
     if (busy || !presetKey || !canDispatch) return;
@@ -223,7 +213,7 @@ export default function P9() {
         <div className="mb-1.5 text-body font-bold text-holo">班组状态</div>
         <NightStatusPill state={pillState} window="22:00–08:00" />
         {run?.fenceSnapshot && (
-          <div className="mt-1.5 text-body text-ink3">当班安全规则 {versionText(run.fenceSnapshot)}（可回溯）</div>
+          <div className="mt-1.5 text-body text-ink3">当班围栏 {versionText(run.fenceSnapshot)}（可回溯）</div>
         )}
       </div>
       <div className="mb-3 rounded-lg border border-line bg-card p-3">
@@ -256,7 +246,7 @@ export default function P9() {
   return (
     <Bridge
       left={hasSnapshot ? left : <AsyncState status={loadState === "error" ? "error" : loadState === "forbidden" ? "forbidden" : "loading"} description={loadMessage || undefined} onRetry={loadState === "error" ? () => void load() : undefined} />}
-      right={hasSnapshot ? right : <AsyncState status="loading" title="班组信息尚未就绪" description="班次状态确认后再显示安全规则和计量信息。" />}
+      right={hasSnapshot ? right : <AsyncState status="loading" title="班组信息尚未就绪" description="班次状态确认后再显示围栏和计量信息。" />}
     >
       <div className="flex min-h-full flex-col">
         {/* GroupHeader */}
@@ -300,7 +290,7 @@ export default function P9() {
             <EmptyState icon={<Icon name="night" size={24} />} title="夜班未配置" hint="请前往规则与权限页面完成夜班配置。" actionLabel="去配置 →" onAction={() => navigate("/guardrails")} />
           ) : (
             <>
-              <SystemDivider time="22:00" summary={`夜班开始 · 当班安全规则${versionText(run?.fenceSnapshot)} · 候选清单 ${run?.candidateCount ?? 0} 项已确认`} />
+              <SystemDivider time="22:00" summary={`夜班开始 · 当班围栏${versionText(run?.fenceSnapshot)} · 候选清单 ${run?.candidateCount ?? 0} 项已确认`} />
               {events.map((ev) => {
                 if (ev.decision.action === "night.note" && ev.who.type === "human") {
                   return <HumanBubble key={ev.event_id} time={new Date(ev.context.time).toTimeString().slice(0, 5)}>{String((ev.decision.after as { text?: string })?.text ?? "")}</HumanBubble>;
@@ -349,26 +339,17 @@ export default function P9() {
           )}
         </div>
 
-        {/* P9E6 班组留言（只读成员隐藏 E2.6/L3.4；留言=五元事件留痕） */}
+        {/* P9E6 班组留言（三合一：只读成员隐藏 E2.6/L3.4；留言=五元事件留痕，入口在右侧全局框） */}
         {!readonly && configured && (
-          <div className="mt-4 flex gap-2">
-            <input
-              value={note}
-              disabled={busy === "note"}
-              onChange={(e) => setNote(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") void sendNote(); }}
-              placeholder="给班组留言…（留言会留痕，触发的动作仍需经过安全规则）"
-              className="flex-1 rounded-lg border border-line bg-bg800 px-3 py-2 text-body text-ink outline-none placeholder:text-ink3 focus:border-gline"
-            />
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-body text-ink3">
             <button
               type="button"
-              onClick={() => void sendNote()}
-              disabled={!note.trim() || Boolean(busy)}
-              aria-busy={busy === "note" || undefined}
-              className="cursor-pointer rounded-lg gold-grad px-4 py-2 text-body font-black text-ongold disabled:cursor-not-allowed disabled:opacity-40"
+              onClick={openNoteInRail}
+              className="cursor-pointer rounded-lg border border-gline bg-gold/10 px-3 py-1.5 text-body font-bold text-gold hover:bg-gold/20"
             >
-              {busy === "note" ? "正在提交…" : <>留言 <Icon name="send" size={14} className="inline" /></>}
+              给班组留言
             </button>
+            <span>留言统一走右侧「织伴」全局框：只写事件账本留痕，触发的动作仍需经过围栏。</span>
           </div>
         )}
       </div>

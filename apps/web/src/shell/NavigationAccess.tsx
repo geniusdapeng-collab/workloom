@@ -19,7 +19,7 @@ import {
 import { Link } from "react-router";
 import type { BaseClientActionPermission } from "@workloom/shared";
 import { ensureDemoLogin, trpc } from "../lib/trpc";
-import { hydrateClientSafeTerms, hydrateDisplayTerminology } from "../lib/display";
+import { hydrateDisplayTerminology } from "../lib/display";
 import {
   NAV_ENTRIES,
   isNavigationPathPermitted,
@@ -77,15 +77,25 @@ export interface ActiveBundleUi {
     terminology: Record<string, string>;
     navigation: { slots: BundleNavigationSlot[] };
     home: { widgets: Array<{ slot: string; component: string; clients: Array<"pc" | "b-mobile" | "c-mobile">; props: Record<string, unknown> }> };
-    welcome?: { system: string[]; keywords: string[]; cards?: Array<{ t: string; d: string }> };
+    welcome?: { system: string[]; keywords: string[] };
     objects: string[];
     workflows: string[];
-    /** 客户端中文显示边界的行业术语白名单（行业包声明，合规注入通道）。 */
-    safeTerms?: string[];
   };
 }
 
-const UNPRIVILEGED_ENTRIES = navigationForPermissions(new Set<string>());
+/**
+ * growth 实验车道模块裁剪（2026-09-20 与 2026-09-21 产品决定）：
+ *  ① 服务前台 / 成员管理 / 伙伴授权 / 个人与偏好（2026-09-20）；
+ *  ② 审批中心（2026-09-21：本机单人运行不需要基座通用审批环节；业务链路自带的关卡
+ *     （如视频管线 G1–G10、定妆照确认）仍由各业务页面就地放行，不受影响）。
+ * 两个批次的页面与路由都已删除（见 App.tsx），导航同样过滤，避免出现点进去 404 的入口。
+ * 只过滤导航入口，不动基座授权结果与其它页面。
+ */
+const REMOVED_NAV_ROUTES = new Set(["/service", "/members", "/partners", "/account", "/approvals"]);
+const withoutRemovedModules = (list: readonly NavigationEntry[]): NavigationEntry[] =>
+  list.filter((entry) => !REMOVED_NAV_ROUTES.has(entry.route));
+
+const UNPRIVILEGED_ENTRIES = withoutRemovedModules(navigationForPermissions(new Set<string>()));
 const NavigationAccessContext = createContext<NavigationAccessValue>({
   entries: UNPRIVILEGED_ENTRIES,
   knownEntries: NAV_ENTRIES,
@@ -139,7 +149,6 @@ export function NavigationAccessProvider({ children }: { children: ReactNode }) 
     let cancelled = false;
     // 切换身份/工作区时先清空上一行业的投影，避免短暂串用旧术语。
     hydrateDisplayTerminology({});
-    hydrateClientSafeTerms([]);
     setStatus("loading");
     setBundleStatus("loading");
     setSubject(null);
@@ -161,7 +170,6 @@ export function NavigationAccessProvider({ children }: { children: ReactNode }) 
           if (projection.configured) {
             activeBundle = projection;
             hydrateDisplayTerminology(projection.ui.terminology);
-            hydrateClientSafeTerms(projection.ui.safeTerms);
             bundleEntries = navigationEntriesFromBundle(projection.bundleId, projection.ui.navigation.slots);
             nextBundleStatus = "ready";
           }
@@ -171,8 +179,8 @@ export function NavigationAccessProvider({ children }: { children: ReactNode }) 
         }
         if (cancelled) return;
         const permissions = new Set(access.navigationPermissions);
-        setKnownEntries(composeNavigation({ client: "b-pc", bundleEntries }));
-        setEntries(navigationForPermissions(permissions, bundleEntries));
+        setKnownEntries(withoutRemovedModules(composeNavigation({ client: "b-pc", bundleEntries })));
+        setEntries(withoutRemovedModules(navigationForPermissions(permissions, bundleEntries)));
         setActionPermissions(new Set(access.actionPermissions));
         setBundle(activeBundle);
         setBundleStatus(nextBundleStatus);
@@ -243,7 +251,7 @@ export function NavigationAccessBoundary({ pathname, children }: { pathname: str
       <AsyncState
         status="forbidden"
         title="当前身份不能访问此页面"
-        description="你当前的角色或版本没有这个入口的权限。如需使用，请联系管理员调整权限或版本。"
+        description="该入口受工作区角色或版本能力限制。如需使用，请联系管理员调整权限或版本。"
         action={<Link to={fallbackRoute} className="wl-button wl-button--secondary">前往可用页面</Link>}
       />
     );

@@ -2,13 +2,13 @@
  * theaterDiff · 轮询数据 diff → 导演事件（CineDirector 的事件源）
  *
  * 对 P0 的 theater 轮询 payload 做增量检测：
- *  - ask：新增 asking 成员（含 approvalId）→ 请示事件（运镜+风铃）
+ *  - ask：新增 asking 成员（等待业务关卡放行的员工）→ 提示事件（运镜+风铃）
  *  - fuse：ticker 新增围栏熔断类动作 → 熔断事件（警报+语音打断）
  *  - cheer：ticker 新增完成/捷报类动作 → 捷报事件（特写+琶音）
  */
 import { useEffect, useRef, useState } from "react";
 import type { FloorAgent } from "../pages/p0/Floor";
-import { actionText, actorText, floorStatusText } from "./display";
+import { actionText, actorText } from "./display";
 import { clientChineseText } from "@workloom/ui";
 
 export interface DirectorEvent {
@@ -42,8 +42,7 @@ export function askingDirectorEvent(seq: number, agent: FloorAgent): DirectorEve
     kind: "ask",
     agentId: agent.id,
     agentName,
-    // 请示气泡：内部动作码必须先经动作字典，否则整句回落成兜底文案。
-    text: floorStatusText(agent.statusLine, `${agentName} 向您请示`),
+    text: clientChineseText(agent.statusLine, `${agentName} 向您请示`),
   };
 }
 

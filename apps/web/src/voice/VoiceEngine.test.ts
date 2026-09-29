@@ -137,7 +137,7 @@ describe("VoiceEngine single-consumer orchestration", () => {
       expect(firstDegraded).toBeGreaterThan(lastUsable);
     });
 
-    it("男声偏好落到可用男声 Li-Mu，而不是无 boundary 的 Eddy", () => {
+    it("狐狸先生（男声偏好）落到可用男声 Li-Mu，而不是无 boundary 的 Eddy", () => {
       const chosen = selectVoice(machineVoices, {
         pitch: 0.92, rate: 0.98,
         preferredNames: ["Eddy", "Reed", "Yunxi", "李沐", "Li-Mu"],
@@ -146,7 +146,7 @@ describe("VoiceEngine single-consumer orchestration", () => {
       expect(DEGRADED_VOICE_RE.test(chosen?.name ?? "")).toBe(false);
     });
 
-    it("女声偏好落到可用女声，而不是无 boundary 的 Flo", () => {
+    it("织伴（女声偏好）落到可用女声，而不是无 boundary 的 Flo", () => {
       const chosen = selectVoice(machineVoices, {
         pitch: 1.04, rate: 0.94, female: true,
         preferredNames: ["Flo", "Tingting", "Meijia", "婷婷", "美嘉"],

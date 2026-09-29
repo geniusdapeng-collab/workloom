@@ -12,21 +12,31 @@ set -u
 cd "$(dirname "$0")/.."
 
 PC_PORT=3000; MB_PORT=3001; MC_PORT=3002; SERVER_PORT=8787
-export SERVICE_C_DEMO_AUTH=true SERVICE_C_WORKSPACE_ID=ws-aipm-demo TOOL_UNVERIFIED_RATE=0
+# C 端服务前台挂载到本仓实际存在的主演示工作区（ai-pm 包不在本仓，ws-aipm-demo 会 500/401）
+export SERVICE_C_DEMO_AUTH=true SERVICE_C_WORKSPACE_ID=ws-yunqi TOOL_UNVERIFIED_RATE=0
 export WEB_PORT=$PC_PORT WEBB_PORT=$MB_PORT WEBC_PORT=$MC_PORT SERVER_PORT=$SERVER_PORT
 
 say() { printf "\033[1;36m[preview:all]\033[0m %s\n" "$1"; }
 PIDS=""
-# 端口清理兼容 macOS（lsof）与 Linux（ss）：macOS 自带 bash 3.2 且无 ss。
 stop_port() {
-  local P=$1 PID=""
+  local P=$1 PID
   if command -v lsof >/dev/null 2>&1; then
-    PID=$(lsof -nP -iTCP:"$P" -sTCP:LISTEN -t 2>/dev/null | head -1 || true)
-  elif command -v ss >/dev/null 2>&1; then
+    PID=$(lsof -nP -ti ":$P" 2>/dev/null | head -1 || true)   # macOS / BSD：lsof 可用
+  else
     PID=$(ss -tlnp 2>/dev/null | grep ":$P " | grep -oP 'pid=\K[0-9]+' | head -1 || true)
   fi
   [ -n "$PID" ] && kill "$PID" 2>/dev/null && say "已停掉 :${P} 残留进程（PID=${PID}）"
-  return 0
+}
+
+# 每个种子所需的行业包目录；本仓未携带的包（如 ai-pm）自动跳过，避免一键预览被无关种子阻断
+seed_bundle_dir() {
+  case "$1" in
+    db:seed) printf '%s' "bundles/hotel" ;;
+    db:seed:video) printf '%s' "bundles/ai-video" ;;
+    db:seed:geo|db:seed:acq) printf '%s' "bundles/geo-growth" ;;
+    db:seed:aipm) printf '%s' "bundles/ai-pm" ;;
+    *) printf '' ;;
+  esac
 }
 cleanup() { say "停止三端预览…"; for P in $PIDS; do kill "$P" 2>/dev/null; done; }
 trap cleanup EXIT INT TERM
@@ -46,6 +56,11 @@ fi
 say "应用数据库迁移…"
 pnpm db:migrate >/tmp/preview-all-migrate.log 2>&1 || { echo "迁移失败 → /tmp/preview-all-migrate.log"; exit 1; }
 for SEED in $(node -e "console.log(Object.keys(require('./package.json').scripts||{}).filter(s=>/^db:seed/.test(s)).join(' '))" 2>/dev/null); do
+  SEED_BUNDLE=$(seed_bundle_dir "$SEED")
+  if [ -n "$SEED_BUNDLE" ] && [ ! -d "$SEED_BUNDLE" ]; then
+    say "跳过 ${SEED}（本仓不含 ${SEED_BUNDLE}）"
+    continue
+  fi
   say "注入模拟数据：pnpm $SEED"
   pnpm "$SEED" >>/tmp/preview-all-seed.log 2>&1 || { echo "种子失败 → /tmp/preview-all-seed.log"; exit 1; }
 done
@@ -72,14 +87,7 @@ PIDS="$PIDS $!"
 for P in $SERVER_PORT $PC_PORT $MB_PORT $MC_PORT; do
   for i in $(seq 1 30); do
     curl -sf -o /dev/null "http://localhost:$P" 2>/dev/null && break
-    # server 根路径返回 404 属正常：以端口监听为准（macOS 用 lsof，Linux 用 ss）
-    if [ "$P" = "$SERVER_PORT" ]; then
-      if command -v lsof >/dev/null 2>&1; then
-        lsof -nP -iTCP:"$P" -sTCP:LISTEN >/dev/null 2>&1 && break
-      elif command -v ss >/dev/null 2>&1; then
-        ss -tln 2>/dev/null | grep -q ":$P " && break
-      fi
-    fi
+    [ "$P" = "$SERVER_PORT" ] && ss -tln 2>/dev/null | grep -q ":$P " && break
     sleep 1
   done
 done

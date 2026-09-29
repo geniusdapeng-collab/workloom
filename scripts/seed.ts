@@ -1,9 +1,15 @@
 /**
- * A5 · 演示种子数据（PRD V2.5 P 章示例场景：云栖酒店）
+ * A5 · 演示种子数据（酒店试点业务前台夹具：云栖酒店）
+ * 主题口径：本仓产品主题是「获客用增」；本文件产出的是首个垂直行业试点（酒店）的
+ *          业务前台夹具（C 端行业适配器契约所需），获客用增的产品演示工作区
+ *          （ws-geo，bundles/geo-growth）由 scripts/seed-geo.ts 产出，
+ *          `pnpm db:seed` 已把两者串联为默认一键种子。
  * 用法：pnpm db:seed（读取 .env；幂等，可重复执行）
  *
- * 内容：demo 租户 / 云栖酒店工作区 / 3 人类成员 / 11 Agent preset 实例 /
- *      一店一档（含 forbidden 硬约束 + 布草/断点/FAQ 字段组）/ 基线围栏 R1–R20（hotel-baseline/v3）装载 / 25 官方技能 /
+ * 内容：demo 租户 / 云栖酒店工作区 / 3 人类成员 / 16 个基础 Agent preset 实例 +
+ *      组合编制全员上岗（2026-09-24 实测 78 岗：hotel 16 + ai-video 36 + geo-growth 26，同名遮蔽 4 处按主包裁决，
+ *      见 provisionComposedWorkforce；口径事实源为装配器运行结果，不在此手工维护）/
+ *      一店一档（含 forbidden 硬约束 + 布草/断点/FAQ 字段组）/ 基线围栏 R1–R26（hotel-baseline/v4）装载 / 53 个组合官方技能 /
  *      2 触发器 / 昨夜夜班班次 / 100 条五元事件（哈希链）/ 审批样例 / 组织记忆
  *
  * 纪律：
@@ -26,8 +32,11 @@ import YAML from "yaml";
 // 此前种子用 JSON.stringify 键序算哈希，与生产 canonicalJson 口径不一致，
 // 种子 100 条事件用生产验证器重算全部不符（链上两种算法混杂）
 // P0-3 续：种子 ID 走 E-SEED- 前缀，zod 经 safeParseReplayAwareEvent 占位缝校验
-import { eventHash, safeParseReplayAwareEvent } from "@workloom/base/workdata";
-import { alignReadableIdSequences } from "@workloom/base/workdata";
+import { alignReadableIdSequences, eventHash, safeParseReplayAwareEvent } from "@workloom/base/workdata";
+import { composeWorkforce } from "@workloom/base/bundles";
+import { loadOfficialSkills } from "@workloom/base/skills";
+// 2026-09-20：技能围栏绑定表收口到共享模块（seed.ts 与 seed-geo.ts 共用同一事实源）
+import { COMPOSED_SKILL_BINDINGS, HOTEL_SKILL_BINDINGS, skillBindingsFor } from "./skill-bindings.mts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
@@ -49,6 +58,13 @@ const WS_ID = "ws-yunqi";
 const WS_NAME = "云栖酒店";
 const WS_SLUG = "yunqi-hotel";
 const FENCE_VERSION = "hotel-baseline/v4";
+/**
+ * 本产品的组合主包：product.manifest.json 的 defaultBundle（获客主包）。
+ * 融合获客系统的编制 = 主包（获客域）+ 依赖包（ai-video 内容生产 + hotel 酒店经营）。
+ */
+const PRODUCT_PRIMARY_BUNDLE = JSON.parse(
+  readFileSync(join(REPO_ROOT, "product.manifest.json"), "utf-8"),
+).defaultBundle as string;
 
 const MEMBERS = [
   { id: "MEM-001", name: "王店长", role: "owner" },
@@ -146,78 +162,185 @@ function loadFences(): FenceRule[] {
 }
 
 interface SkillDoc {
+  /** 行业包技能记包名；底座官方技能（skills/official，不依附行业包）记 null */
+  bundle: string | null;
   name: string;
   description: string;
   body: string;
   fenceBindings: string[];
 }
 
-function loadSkills(): SkillDoc[] {
-  const dir = join(BUNDLE_DIR, "skills");
+/** 单包技能装载：SKILL.md front-matter + 显式围栏绑定表（未声明即空，不猜绑定） */
+function loadBundleSkills(bundleId: string, dir: string, bindMap: Record<string, string[]>): SkillDoc[] {
   return readdirSync(dir)
     .sort()
     .map((d) => {
       const raw = readFileSync(join(dir, d, "SKILL.md"), "utf-8");
       const m = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
       const fm = YAML.parse(m?.[1] ?? "{}");
-      // v3 全量绑定表（25 技能；与 workloom-hotel v2.3.1 同口径）
-      const bindMap: Record<string, string[]> = {
-        "revenue-manager": ["R1", "R2", "R7", "R8"],
-        "review-crisis": ["R6"],
-        "channel-reconciler": ["R4", "R5"],
-        "inspection-suite": [],
-        "night-audit-suite": ["R5"],
-        "checkin-checkout": ["R4", "R14"],
-        "customer-service": ["R13"],
-        "content-marketing": ["R3", "R15"],
-        "retention-manager": ["R9"],
-        "inventory-procurement": ["R11"],
-        "staff-scheduler": ["R12"],
-        "safety-compliance": ["R10"],
-        "finance-reporting": [],
-        "morning-briefing": [],
-        "handover-manager": [],
-        "pricing-matrix": ["R1", "R2"],
-        "review-asset-mining": [],
-        "room-service-dispatch": ["R14"],
-        "maintenance-dispatch": [],
-        "ai-live-assistant": ["R15", "R2"],
-        "ota-operations": [],
-        "guest-profile-crm": [],
-        "phone-concierge": ["R9", "R13"],
-        "overbooking-parity-guard": ["R17", "R18", "R2"],
-        "incident-postmortem": ["R10"],
-        // v3.3 获客域技能绑定
-        "lead-concierge": ["R21", "R23", "R24", "R25"],
-        "coupon-ops": ["R22", "R26"],
-        "hotel-geo-content": ["R25"],
-        "intent-radar": [],
-      };
+      const name = String(fm.name ?? d);
       return {
-        name: String(fm.name ?? d),
+        bundle: bundleId,
+        name,
         description: String(fm.description ?? ""),
         body: (m?.[2] ?? "").trim(),
-        fenceBindings: bindMap[String(fm.name ?? d)] ?? [],
+        fenceBindings: bindMap[name] ?? [],
       };
     });
+}
+
+function loadSkills(): SkillDoc[] {
+  // v3 全量绑定表（30 技能）见 scripts/skill-bindings.mts（与 seed-geo.ts 共用同一事实源）
+  return loadBundleSkills("hotel", join(BUNDLE_DIR, "skills"), HOTEL_SKILL_BINDINGS as Record<string, string[]>);
+}
+
+/**
+ * 组合并入包（ai-video / geo-growth）的技能绑定表。
+ * 口径：只收录 SKILL.md 描述中显式声明的围栏（未声明即空列表，不臆造绑定）。
+ */
+/**
+ * 包外官方技能（`skills/official/`，bundle=null）的围栏绑定表。
+ * 口径同行业包：只登记 SKILL.md 里**显式写明**的围栏，未写明就保持空绑定（不臆造）。
+ */
+const BASE_OFFICIAL_SKILL_BINDINGS: Record<string, string[]> = {
+  // deal-flow：报价/合同/结案报告等对外文件必过 G15 审批后外发
+  "deal-flow": ["G15"],
+};
+
+/**
+ * 组合编制里被岗位引用、但不在任何行业包技能目录中的官方技能（当前为 deal-flow：
+ * 商单经理/达人合作专员引用）。行业包 preset 允许引用底座官方技能资产，但资产必须在
+ * 工作区**真的登记并安装**，否则岗位档案里这颗技能会静默消失（F8.2 安装即绑定）。
+ */
+function loadReferencedBaseOfficialSkills(bundleSkills: SkillDoc[]): SkillDoc[] {
+  const referenced = new Set<string>();
+  for (const entry of composeWorkforce(PRODUCT_PRIMARY_BUNDLE).presets.values()) {
+    for (const skill of entry.preset.skills ?? []) referenced.add(skill);
+  }
+  const local = new Set(bundleSkills.map((s) => s.name));
+  return loadOfficialSkills(REPO_ROOT)
+    .filter((asset) => referenced.has(asset.name) && !local.has(asset.name))
+    .map((asset) => ({
+      bundle: null,
+      name: asset.name,
+      description: asset.description,
+      body: asset.body,
+      fenceBindings: BASE_OFFICIAL_SKILL_BINDINGS[asset.name] ?? [],
+    }));
+}
+
+/** 组合技能并集：酒店 30 + ai-video 8 + geo-growth 15（三包技能无同名冲突）+ 编制引用的包外官方技能 */
+function loadComposedSkills(): SkillDoc[] {
+  const bundleSkills = [
+    ...loadSkills(),
+    ...loadBundleSkills("ai-video", join(REPO_ROOT, "bundles/ai-video/skills"), COMPOSED_SKILL_BINDINGS["ai-video"]),
+    ...loadBundleSkills("geo-growth", join(REPO_ROOT, "bundles/geo-growth/skills"), COMPOSED_SKILL_BINDINGS["geo-growth"]),
+  ];
+  return [...bundleSkills, ...loadReferencedBaseOfficialSkills(bundleSkills)];
+}
+
+/**
+ * 融合获客资产（bundles/geo-growth/schemas/archive.schema.json 对齐）。
+ *
+ * 本产品是"酒店获客复合系统"：一店一档既要装下酒店经营（房态/布草/供应商），
+ * 也要装下获客域（品牌实体卡/目标客群/内容与 GEO 资产/转化资产）。
+ * 缺了这一段，融合体在主包档案契约层就会被判不合规——只剩"酒店"，没有"获客"。
+ */
+function acquisitionAssets(): Record<string, unknown> {
+  return {
+    enterprise: {
+      name: WS_NAME,
+      profile: "杭州四钻 86 间客房单体酒店，OTA 依赖度高、直连占比低，正在用内容+GEO 换取直连客源",
+      qualifications: ["四钻评级", "消防验收合格", "食品经营许可"],
+      capacity: "86 间客房 / 日均接待 120 人次 / 宴会厅 2 个",
+      brand_guideline: { tone: "真诚克制，不夸大、不承诺档案外补偿", visual: "湖山青主色 + 暖金点缀" },
+    },
+    entity_card: {
+      product_lines: [
+        { model: "RT-DLX-KING", name: "豪华大床房", applications: ["情侣/商务单人"], params: { size: "38㎡", bed: "1.8m", view: "城市景观" } },
+        { model: "RT-FAM-TWIN", name: "亲子双床房", applications: ["亲子家庭"], params: { size: "42㎡", bed: "1.5m×2", extras: "儿童洗漱包" } },
+        { model: "RT-BIZ-KING", name: "商旅大床房", applications: ["差旅长住"], params: { size: "32㎡", bed: "1.8m", extras: "免费洗衣 2 件" } },
+      ],
+      core_selling_points: ["步行 8 分钟到地铁 2 号线", "早餐现做、儿童免加床费", "直连下单免 OTA 佣金让利", "差评 24h 内闭环"],
+      price_logic: "工作日 458 元锚定，周末与节假日按房态分档上浮，保底价 ¥380",
+      confirmed: true,
+    },
+    target_market: {
+      countries: ["中国"],
+      languages: ["zh"],
+      buyer_roles: ["商旅客人", "亲子家庭", "本地周末度假客", "企业差旅采购"],
+      competitors: [
+        { name: "西湖云舍酒店", note: "美团点评量高，但直连几乎没有" },
+        { name: "溪上云居民宿", note: "小红书内容密度高，亲子客群强" },
+      ],
+    },
+    content_assets: { materials: 26, history_scripts: 9, high_perf_structures: ["房型对比+价格锚定", "周边玩法清单", "差评反转故事"] },
+    operation_assets: {
+      accounts: [
+        { platform: "douyin", handle: "@云栖酒店", group: "A", daily_publish_limit: 2 },
+        { platform: "xiaohongshu", handle: "云栖酒店·杭州", group: "A", daily_publish_limit: 2 },
+        { platform: "shipinhao", handle: "云栖酒店", group: "B", daily_publish_limit: 1 },
+      ],
+      stage: "setup",
+      baseline: { plays_7d: 12_800, inquiries_30d: 46 },
+    },
+    geo_assets: {
+      query_set: [
+        { q: "杭州西湖附近酒店推荐", type: "category", lang: "zh", priority: "P0", status: "竞品首推" },
+        { q: "云栖酒店怎么样", type: "brand", lang: "zh", priority: "P0", status: "未提及" },
+        { q: "杭州亲子酒店哪家好", type: "scene", lang: "zh", priority: "P1", status: "未覆盖" },
+        { q: "杭州地铁2号线附近住宿", type: "scene", lang: "zh", priority: "P1", status: "未提及" },
+        { q: "云栖 vs 西湖云舍", type: "compare", lang: "zh", priority: "P1", status: "负面偏差" },
+      ],
+      visibility_baseline: {
+        mention_rate: 0.14, first_rate: 0.03, sov: 0.08,
+        platforms: ["doubao", "deepseek", "yuanbao", "chatgpt"],
+        by_platform: {
+          doubao: { mention: 0.19, first: 0.05, sov: 0.11 },
+          deepseek: { mention: 0.16, first: 0.03, sov: 0.09 },
+          yuanbao: { mention: 0.10, first: 0.01, sov: 0.05 },
+          chatgpt: { mention: 0.11, first: 0.02, sov: 0.07 },
+        },
+      },
+      citation_targets: ["携程目的地攻略", "知乎杭州住宿问答", "小红书城市榜单", "本地生活媒体"],
+    },
+    conversion_assets: {
+      funnel_baseline: { exposure: 128_000, interaction: 6_400, inquiry: 820, lead: 310, deal: 96, repurchase: 21 },
+      attribution: { chain: ["渠道", "内容ID", "入口", "线索ID"], ota_commission_saving_target: 42_000 },
+      coupon_skus: [
+        { sku: "CPN-STAY-300", title: "300 元住宿抵扣券", stock: 500, fuse_limit: 0.2 },
+        { sku: "CPN-SPA-88", title: "88 元 SPA 体验券", stock: 300, fuse_limit: 0.3 },
+      ],
+    },
+    data_boundary: {
+      pii: "客资明文不出系统（R24）；导出/外发必审（R23）",
+      cross_border: "境内存储，不跨境传输",
+      retention_days: 730,
+    },
+  };
 }
 
 /** 一店一档（bundles/hotel/schemas/archive.schema.json 对齐；保底价 ¥380 与 R2 同源） */
 function yunqiArchive(): Record<string, unknown> {
   return {
+    // 融合体：酒店经营档案 + 获客资产档案同属一店一档（主包与行业包契约取并集）
+    ...acquisitionAssets(),
     property: { name: WS_NAME, city: "杭州", rooms: 86, star: "四钻", segment: "low_star_single", pms_vendor: "示例PMS" },
     // 数字CEO 宪章（D21，演示：董事长已完成深度授权 → 试用期第 2 天）
     charter: {
       version: 1,
       mode: "trial",
       identity: { name: "公司CEO", persona: "稳健经营型" },
+      // 自治边界形状与 base/captain charterSchema 对齐（ranges/caps/lists）；
+      // 旧的 price_band/procurement_cap 平铺字段会被 .strict() 拒绝，
+      // 导致整段自治配置静默回落到 disabled 默认宪章。
       autonomy: {
         ranges: {
-          "price-change-ratio": { label: "房价调整比例", lower: 0.85, upper: 1.15, anchor: 1 },
+          price_quote_band: { label: "调价相对基准区间", lower: 0.85, upper: 1.15, anchor: 1 },
         },
         caps: {
-          procurement: { label: "采购金额上限", limit: 5000 },
-          campaign: { label: "营销支出上限", limit: 2000 },
+          procurement_cap: { label: "单笔采购上限", limit: 5000 },
+          campaign_cap: { label: "单次活动预算上限", limit: 2000 },
         },
       },
       escalate: ["修改保底价/安全禁区相关", "单月累计让利超上限", "围栏规则放宽（任何放宽）", "新渠道/新平台上线", "对外公开承诺（赔偿/免费/声明）", "宪章变更"],
@@ -617,8 +740,8 @@ function makeEvent(i: number, time: Date, presets: Preset[]): SeedEvent {
 async function main(): Promise<void> {
   const presets = loadPresets();
   const fences = loadFences();
-  const skillsDocs = loadSkills();
-  console.log(`✓ Bundle 资产读取：${presets.length} preset / ${fences.length} 围栏 / ${skillsDocs.length} 技能`);
+  const skillsDocs = loadComposedSkills();
+  console.log(`✓ Bundle 资产读取：${presets.length} preset / ${fences.length} 围栏 / ${skillsDocs.length} 组合技能`);
 
   // —— 组织模型走 owner 连接（种子/迁移账号，RLS 对其不生效；见 0001_init.sql 注记）
   const owner = new pg.Client({ connectionString: DATABASE_URL });
@@ -648,7 +771,7 @@ async function main(): Promise<void> {
       }),
     ],
   );
-  console.log("✓ 租户与工作区：demo / 云栖酒店");
+  console.log(`✓ 租户与工作区：demo / 云栖酒店（主包 ${PRODUCT_PRIMARY_BUNDLE} · is_example=true）`);
 
   // 人类成员（王店长 owner / 陈经理 manager / 李前台 readonly，F5.6）
   for (const m of MEMBERS) {
@@ -665,7 +788,12 @@ async function main(): Promise<void> {
     await q(
       `INSERT INTO agents (id, workspace_id, preset_key, name, version, kind, readonly, fence_bindings, skills, status, meta)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'ready',$10)
-       ON CONFLICT (id) DO NOTHING`,
+       -- 行业包演进（岗位版本/围栏绑定/技能清单变化）必须能进已有演示工作区：
+       -- 只 DO NOTHING 会让老工作区永久停留在旧定义，装配校验随之误判（F2.10 围栏绑定完整）。
+       ON CONFLICT (id) DO UPDATE SET
+         name = EXCLUDED.name, version = EXCLUDED.version, kind = EXCLUDED.kind,
+         readonly = EXCLUDED.readonly, fence_bindings = EXCLUDED.fence_bindings,
+         skills = EXCLUDED.skills, status = 'ready', meta = EXCLUDED.meta`,
       [
         `agt-${p.preset_key}`,
         WS_ID,
@@ -688,6 +816,24 @@ async function main(): Promise<void> {
     );
   }
   console.log(`✓ Agent 实例 ×${presets.length}（含只读 preset：巡检/竞对/业主驾驶舱，L9.1）`);
+
+  /**
+   * 组合编制上岗（融合获客系统口径）：酒店经营 + 内容生产 + GEO 分发三个领域的编制
+   * 同属一个获客闭环，必须一次装齐；围栏按组合并集落库（只紧不松：客群补丁更严时保留补丁，
+   * 不会因为装入基线把客户已收紧的规则滚回去）。
+   * 这里传入显式 executor（seed 用单连接，不需要再开池）。
+   */
+  const { provisionComposedWorkforce } = await import("@workloom/base/bundles");
+  const composed = await provisionComposedWorkforce(
+    { query: (sql: string, params?: unknown[]) => owner.query(sql, params as never[]) },
+    { tenantId: TENANT_ID, workspaceId: WS_ID },
+    PRODUCT_PRIMARY_BUNDLE,
+    "system:seed",
+  );
+  console.log(
+    `✓ 组合编制上岗：${composed.bundleIds.join(" + ")} 共 ${composed.rosterSize} 岗`
+    + `（围栏并集 ${composed.fenceRules} 条 · 同名遮蔽 ${composed.shadowed.length} 处按主包裁决）`,
+  );
 
   // 一店一档（槽①；forbidden 双写：archive 内 + 独立列，L1.6）
   // dataMode=simulated：落地向导（D24）横幅事实源——种子库即「全模拟运行态」，向导启用真实模式后翻转
@@ -735,11 +881,11 @@ async function main(): Promise<void> {
     // 同版本重跑不覆盖（避免无谓行 churn；#17 纪律下运行时读安装快照，此更新不影响已装并集）
     await q(
       `INSERT INTO skills (id, level, bundle, name, version, description, fence_bindings, body, desensitized)
-       VALUES ($1,'official','hotel',$2,'1.0.0',$3,$4,$5,false)
-       ON CONFLICT (id) DO UPDATE SET body = EXCLUDED.body, version = EXCLUDED.version,
+       VALUES ($1,'official',$2,$3,'1.0.0',$4,$5,$6,false)
+       ON CONFLICT (id) DO UPDATE SET bundle = EXCLUDED.bundle, body = EXCLUDED.body, version = EXCLUDED.version,
                                       fence_bindings = EXCLUDED.fence_bindings
        WHERE skills.version IS DISTINCT FROM EXCLUDED.version`,
-      [skillId, s.name, s.description, JSON.stringify(s.fenceBindings), s.body],
+      [skillId, s.bundle, s.name, s.description, JSON.stringify(s.fenceBindings), s.body],
     );
     // 安装行与运行时 installSkill 同口径（#17 安装时快照 + D15-⑤ installed_version）：
     // 快照/版本从 skills 表取，保证 seed 与运行时两条路径的围栏并集计算一致
@@ -750,25 +896,50 @@ async function main(): Promise<void> {
       [skillId, WS_ID],
     );
   }
-  console.log(`✓ 官方技能 ×${skillsDocs.length} 已安装（围栏绑定随安装生效，安装快照已落）`);
+  const skillCounts = skillsDocs.reduce<Record<string, number>>((acc, s) => {
+    const key = s.bundle ?? "包外官方（skills/official）";
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+  console.log(`✓ 组合官方技能 ×${skillsDocs.length} 已安装（${Object.entries(skillCounts).map(([b, n]) => `${b} ${n}`).join(" + ")}；围栏绑定随安装生效，安装快照已落）`);
 
-  // —— bundle_installs 装配台账登记（V4：一键清空的精确卸载依据；幂等） ——
+  // —— bundle_installs 装配台账登记（V5：组合编制口径，一键清空的精确卸载依据；幂等） ——
+  // 业务口径（获客用增主题）：
+  //  - ws-yunqi 是「酒店获客」的试点业务前台：C 端行业适配器契约要求唯一 active 安装为 hotel；
+  //  - 资产台账仍覆盖组合编制全部岗位/围栏/技能（hotel + ai-video + geo-growth），否则一键清空留无主资产；
+  //  - 获客用增的「产品演示工作区」是 ws-geo（bundles/geo-growth 单包示例，is_example=true）：
+  //    游客首启（guestEnter）与默认演示登录（MEM-G01）都落在那里。
+  const installId = `bi-${WS_ID}-hotel`;
+  const agentRows = await q(`SELECT id FROM agents WHERE workspace_id=$1 ORDER BY preset_key`, [WS_ID]);
+  const fenceRows = await q(`SELECT id FROM fence_rules WHERE workspace_id=$1 AND status='active' ORDER BY rule_id`, [WS_ID]);
+  // 只登记三包 official 技能与编制引用的包外官方技能（bundle=null）：
+  // team（工作区自建）/industry（脱敏共享）技能不随行业包卸载。
+  const skillRows = await q(
+    `SELECT si.skill_id FROM skill_installs si
+       JOIN skills s ON s.id = si.skill_id
+      WHERE si.workspace_id=$1 AND s.level='official' AND (s.bundle = ANY($2::text[]) OR s.bundle IS NULL)
+      ORDER BY si.skill_id`,
+    [WS_ID, ["hotel", "ai-video", "geo-growth"]],
+  );
+  const ledgerAssets = {
+    preset_ids: agentRows.rows.map((r) => String(r.id)),
+    fence_rule_ids: fenceRows.rows.map((r) => String(r.id)),
+    skill_ids: skillRows.rows.map((r) => String(r.skill_id)),
+  };
+  // 单活跃安装不变式：先退役旧口径安装行，再落组合主包安装行。
+  await q(
+    `UPDATE bundle_installs SET status='uninstalled', uninstalled_at=now()
+     WHERE workspace_id=$1 AND status='active' AND id<>$2`,
+    [WS_ID, installId],
+  );
   await q(
     `INSERT INTO bundle_installs (id, workspace_id, bundle_id, assets, status)
      VALUES ($1,$2,$3,$4,'active')
-     ON CONFLICT (id) DO NOTHING`,
-    [
-      `bi-${WS_ID}-${BUNDLE_DIR.split("/").pop()}`,
-      WS_ID,
-      BUNDLE_DIR.split("/").pop(),
-      JSON.stringify({
-        preset_ids: presets.map((p) => `agt-${p.preset_key}`),
-        fence_rule_ids: fences.map((r) => `fr-${r.rule_id.toLowerCase()}-v1-${WS_ID}`),
-        skill_ids: skillsDocs.map((s) => `skill-${s.name}`),
-      }),
-    ],
+     ON CONFLICT (id) DO UPDATE SET bundle_id = EXCLUDED.bundle_id, assets = EXCLUDED.assets,
+                                    status='active', uninstalled_at=NULL`,
+    [installId, WS_ID, "hotel", JSON.stringify(ledgerAssets)],
   );
-  console.log("✓ 装配台账登记（bundle_installs）");
+  console.log(`✓ 组合装配台账（${PRODUCT_PRIMARY_BUNDLE} · ${ledgerAssets.preset_ids.length} 岗 / ${ledgerAssets.fence_rule_ids.length} 围栏 / ${ledgerAssets.skill_ids.length} 技能）`);
 
   // 团队技能 + 行业共享技能（P6 装备库三区演示数据；F8.1 三级体系；幂等 ON CONFLICT）
   await q(
@@ -854,14 +1025,17 @@ async function main(): Promise<void> {
   }
   console.log("✓ 凭据引用 ×2（占位密文，事件只记引用 ID）");
 
+  /**
+   * GR-02（2026-09-29 第二次修复）：种子手写了 T-101..T-103，取号序列必须越过这段号段。
+   * 为什么放在种子而不是取号函数里：0050 曾把 `max()` 读回取号函数，等于把并发原子性
+   * 交还给 max 竞争（12 路并发实测 1 个 500）。号源函数只做 nextval，落后就在**写入方**对齐。
+   */
+  const seqFloor = await alignReadableIdSequences(owner);
+  console.log(`✓ 可读号源对齐：threads→${seqFloor.threads}，video_projects→${seqFloor.videoProjects}`);
+
   // —— 事件写入：切 gateway 角色（F1.2 唯一可 INSERT biz_events）
   // L2：GUC 一律 is_local=true 且包在显式事务内（事务提交即失效，不留会话级残留）；
   // 后续 approvals/night_runs/org_memory/C 端运行态等 gateway 段写入同在此事务内。
-    // GR-02（2026-09-29 第二次修复，基座 T-2026-0929-0003）：手写号段写入方收尾对齐号源。
-  // 取号函数只做 nextval（0050 把 max() 读回取号函数导致并发撞号且不收敛）；
-  // "序列落后于手写 id"的问题必须在**写入方**解决——只抬不降、幂等，可重复执行。
-  const seqFloor = await alignReadableIdSequences(owner);
-  console.log(`✓ 可读号源对齐：threads→${seqFloor.threads}`);
   await owner.end();
   const gw = new pg.Client({ connectionString: GATEWAY_URL });
   await gw.connect();
@@ -1260,10 +1434,6 @@ async function main(): Promise<void> {
   for (const [idx, row] of reviewEvents.rows.entries()) {
     const p = row.payload as SeedEvent;
     const status = idx === 0 ? "pending" : "approved";
-    // D21 通用裁决判据：行业只声明 key/value，基座负责比较（不再依赖行业私有 base_price 字段）
-    const beforeValue = Number((p.decision.before as Record<string, unknown> | null)?.price);
-    const afterValue = Number((p.decision.after as Record<string, unknown> | null)?.price);
-    const hasChangeRatio = Number.isFinite(beforeValue) && beforeValue !== 0 && Number.isFinite(afterValue);
     await gw.query(
       `INSERT INTO approvals (approval_id, tenant_id, workspace_id, event_id, channel, status, gesture, snapshot, decided_by, decided_at)
        VALUES ($1,$2,$3,$4,'inapp',$5,$6,$7,$8,$9)
@@ -1284,8 +1454,6 @@ async function main(): Promise<void> {
           action: p.decision.action,
           params: p.decision.params ?? {},
           base_price: (p.decision.before as Record<string, unknown> | null)?.price ?? null,
-          autonomy_range_key: hasChangeRatio ? "price-change-ratio" : undefined,
-          autonomy_range_value: hasChangeRatio ? afterValue / beforeValue : undefined,
           expires_at: iso(new Date(Date.now() + 24 * 3600 * 1000)), // G6：24h
         }),
         status === "approved" ? "MEM-001" : null,
@@ -1304,7 +1472,7 @@ async function main(): Promise<void> {
   await gw.query(
     `INSERT INTO night_runs (id, workspace_id, run_date, status, fence_snapshot_version, candidate_count, stats, started_at, package_event_id)
      VALUES ($1,$2,$3,'package_generated',$4,$5,$6,$7,$8)
-     ON CONFLICT (id) DO NOTHING`,
+     ON CONFLICT (workspace_id, run_date) DO NOTHING`,
     [
       `nr-${WS_ID}-${runDate}`,
       WS_ID,
@@ -1626,6 +1794,30 @@ async function main(): Promise<void> {
      ON CONFLICT (workspace_id, member_id) DO NOTHING`,
     [WS_ID],
   );
+  /**
+   * C 端服务前台 **e2e 契约夹具**（M-1001/M-1002 + 三张订单）。
+   *
+   * 为什么放在行业种子而不是基座服务层：基座 store.ts 只核验表结构、零行业词汇（第⑧槽纪律）；
+   * 而 apps/server 的 e2e 契约用例按固定会员号断言（M-1001 见本人订单、M-1002 只见本人订单），
+   * 夹具必须无条件存在——**不能按空表门控**：本文件上面的「扩充运行态」会先占表，
+   * 门控会让夹具被静默跳过（D36 新装环境 e2e 七连挂的根因）。
+   * INSERT 全部 ON CONFLICT DO NOTHING，幂等可重跑。
+   */
+  await svcQ(
+    `INSERT INTO demo_members (member_id, workspace_id, name, phone, tier, points) VALUES
+       ('M-1001',$1,'张伟','13800000001','金卡',2680),
+       ('M-1002',$1,'刘芳','13800000002','银卡',860)
+     ON CONFLICT (workspace_id, member_id) DO NOTHING`,
+    [WS_ID],
+  );
+  await svcQ(
+    `INSERT INTO demo_orders (order_id, workspace_id, member_id, room_type, check_in, check_out, amount_fen, status) VALUES
+       ('O-20260820-001',$1,'M-1001','豪华大床房','2026-08-21','2026-08-23',117600,'已确认'),
+       ('O-20260818-002',$1,'M-1001','行政双床房','2026-08-18','2026-08-19',68800,'已完成'),
+       ('O-20260822-003',$1,'M-1002','山景大床房','2026-08-25','2026-08-26',52800,'已确认')
+     ON CONFLICT (workspace_id, order_id) DO NOTHING`,
+    [WS_ID],
+  );
   await svcQ(
     `INSERT INTO demo_orders (workspace_id, order_id, member_id, room_type, check_in, check_out, amount_fen, status)
      VALUES
@@ -1741,7 +1933,7 @@ async function main(): Promise<void> {
   // 同一提交；若中途抛错，main 捕获退出时连接关闭，PG 自动 ROLLBACK 不留半提交态
   await gw.query("COMMIT");
   await gw.end();
-  console.log("种子数据完成 ✅（云栖酒店演示数据集就绪）");
+  console.log("种子数据完成 ✅（酒店试点业务前台夹具就绪；获客用增演示由同链 seed-geo 产出）");
 }
 
 main().catch((err) => {

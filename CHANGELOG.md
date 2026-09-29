@@ -1,5 +1,98 @@
 # Changelog
 
+## [client-delivery] - 2026-09-28 · 右侧「织伴」对话框交付链路修复（T-2026-0928-0001）
+
+> 客户报障「右侧 AI 对话框安排任何任务都无法交付」。沙箱真机复现 + 逐行审计后按三轮问题清单
+> （GR-01..GR-14 / N-01..N-12 / N-13..N-16）成批修复，并在**干净生产态库**（54 迁移 + 全种子）
+> 用平台自有模型驱动三类型任务跑通。核心改动：
+
+- **前端展示闸门**：模型自然语言不再走系统字符串白名单（此前回答里出现 `<facts>` 一类标签即整段
+  显示"应答内容暂时无法显示"）；新增 `apps/web/src/lib/clientText.ts`：剥标签、局部替换机器标识、
+  纯 JSON/内部错误才兜底；任务卡显示连接器提示与失败原因，审批卡显示参数不完整警示，最终结果显示
+  「真实连接器回执 / 模拟执行」标识，卡片轮询按状态降频；
+- **岗位与计划**：派活按任务语义选岗（视觉/视频/发布/定价/增长五域，`runtime/dispatch-routing.ts`），
+  不再只按 bundle 清单顺序取第一个 orchestrator；计划持久化（`threads.plan/plan_version`，replay 复用
+  原计划）、步骤指纹绑定审批与已完成回执（审批漂移→重新裁决、done 漂移→重跑）、plan 相关性评估；
+- **审批与线程生命周期**：同步骤挂起去重（不再刷屏）、兜底计划只对写步骤强制人工且跳过围栏自动判定、
+  驳回联动线程 `cancelled`、agent 批准后自动续跑、agent 支持 runImmediately（返回 pending_review）；
+- **执行面**：多桥执行器注册表 `WORKLOOM_TOOL_EXECUTOR_MODULES`（桌面端按载荷自动注入，token 走进程
+  环境/工位本机文件），桥缓存按作用域分桶；工具异常 → 线程 failed 终态（不再僵尸 running）；
+  并发口径只统计有心跳的 running；
+- **本机调度器**：`runtime/scheduler.ts` 扫描 queued 线程自动执行（含 agent 接管），启动时把崩溃遗留的
+  running 线程转 paused；
+- **模型链路**：provider 真超时 + AbortSignal 贯通、场景化超时表、全链熔断快速失败、意图分类分场景
+  （交付入口 12s）+ 问句优先规则兜底、ask 120 字硬闸 + 围栏输出闸门 + 合成/降级标识、
+  geo-growth 领域事实面按行业注册（实时取数）、tRPC onError 统一日志 + 5xx 事件化、goalRef 长文档案、
+  视频 clarify 带回原目标；
+- **围栏词表**：三包红线动作对齐真实工具名（只增不减），无法接线的红线显式声明 `unwired_blocks`；
+  装配检查单新增「围栏-工具词表交叉校验」（红线空膛＝装配失败），出题器改双视图；
+- **数据与门禁**：新增迁移 0047（计划持久化/审批 superseded）、0048+0050（号源序列化 + 现存最大值下限）、
+  0049（线程 cancelled）、0051（事件租户护栏：工作区有属主行时事件租户必须一致）；
+- **生产态验收**：`pnpm suite` 467/467、`db:verify-chain` 六项全绿；右侧对话框三类型真机——
+  ask 领域问答（T-113）、quest 生图真实交付（T-115，`receipt.mode=real`）、agent 挂起→批准→自动续跑
+  →completed（T-116，任务详情页含真实回执与产物下载）。
+
+## [loomball] - 2026-09-27 · 织球 LoomBall：AI 班组状态可视化（T-2026-0926-0019）
+
+> 一只球把「班组此刻在干什么」变得看得见：名册 / 织伴 / 任务页三处接入，全部由**真实信号**驱动
+> （事件账本最近动作、待审批单、围栏阻断、夜班窗口、run 注册表）；开关一关全体回退。
+
+- 新增 vendor 适配层 `apps/web/src/vendor/loomball/**`：上游 grok-ball（MIT）**原样**入库
+  （`PINNED` 锁 commit + `LICENSE` + `NOTICE.md` 署名与去商标声明）；适配层捕获后删除上游兼容门面
+  `window.GrokBall`，业务代码零上游商标字样（`provenance.test.ts` 闸门）；
+- 新增组件层 `apps/web/src/components/loomball/**`：`LoomBall.tsx`（品牌皮肤/尺寸推眼倍/live 与 hover
+  激活/注视跟随/`prefers-reduced-motion` 静态）、`agent-emotion.ts`（状态→表情**唯一事实源**，与文字
+  chip 同源）、`useStableEmotion.ts`（1.5s 最小驻留 + 出错立即报丧并驻留 6s）、`emotions-workloom.ts`
+  （自定义工作状态 `50 渲染中 / 51 待审批 / 52 夜班值守`，完整声明式配置）；
+- 服务端补真实信号：`roster.list` 增 LATERAL 三投影（最近动作+时间 / 待审批数 / 近 1h 围栏阻断数）、
+  新增只读聚合 `video.studio.active`（run 注册表 + approvals 表）——不新增表、不改任何写路径；
+- 三处接入：名册员工卡（44px，忙碌/待审批常驻动画，其余静态 + hover 激活；状态 chip 与球同源）、
+  织伴小角落态（mini 圆球 = 班组状态眼，紧凑态旁挂 40px）、任务页标题行（`pending_review`=待人审）；
+- 开关与回退：`VITE_LOOMBALL=1` 默认开、`=0` 全部回退（等尺寸空盒/海报球/不渲染），零实例零监听零帧循环；
+- 登记与文档：`oss-components.json`（weekly 扫描、永不自动升级）、`docs/loomball.md`（映射表/三接入面/
+  防抖与性能/运维回退/真机清单）、`.env.example` 登记开关；
+- 真机证据（本地 PG17 + 79 岗种子 + 真实网关事件）：名册 79 球静态渲染 3s 采样 76 帧（仅 2 球常驻动画）、
+  hover 激活 `0→1`、注入真实事件后 渲染师=50 渲染中 / 情报官·采集=40 检索资料、待审批 3 单=51、
+  夜班窗口 31 岗=52、任务页完成态=33；`VITE_LOOMBALL=0` 生产构建三处全回退。
+
+## [intel-search-api] - 2026-09-25 · 情报检索通道加固：API 检索源（T-2026-0925-0003）
+
+- 引擎链新增 `api` 通道并置顶：`TAVILY_API_KEY`（Tavily 协议）或 `WL_SEARCH_API_URL`+`WL_SEARCH_API_KEY`
+  （通用 JSON 网关，Bearer 鉴权）配好即自动启用；未配置静默跳过，保留 HTML 三引擎链（baidu-m/so360/bing）；
+- 结果数组/字段名多形态兼容（`results / items / data[] / data.items[]`；`snippet|content|description|summary`）；
+- 限流（403/429）与 HTML 通道同口径进 15 分钟熔断冷却，缓存复用，失败按缺站（不编造）；
+- 单测 +4（Tavily 解析/通用网关鉴权/限流熔断/未配置静默），`apps/server` 用例 12/12 通过。
+
+## [video-routing-dossier] - 2026-09-25 · 视频管线自动化分流 + 商品情报档案激活（T-2026-0925-0002）
+
+> 营销片/叙事片自动分流（不确定就问用户，不猜不提）；商品情报档案从「只出任务书」变为可用的真实档案链路；
+> 真机跑批暴露并修复 7 类宿主/引擎缺陷（含"AI 监制只看到 600 字摘录"这一系统性误杀根因）。
+
+### 自动化分流（新增）
+
+- `packages/video-studio/src/pipeline-router.ts`：显式声明 → 规则打分 → 商品锚点 → LLM 仲裁（`pipeline-route`，L1+规则兜底）→ **不确定即澄清**；
+  营销片缺商品名同样先问（情报五站以商品为锚）；`stripRoutingDirective` 清掉分流行指令、`buildPipelineIntent` 写入需求口径；
+- `threads.dispatch` / `video.studio.start` 接线：澄清落 `video.route.clarify`、判定落 `video.route.standard`（含 pipeline/via/confidence/product/signals）。
+
+### 商品情报档案激活
+
+- 新增 `apps/server/src/video/data-mining-executor.ts`：多引擎检索（baidu-m/so360/bing）+ 限速熔断 + 磁盘缓存 +
+  可预置真实来源 + **URL 白名单**（防幻觉链接）+ 相关性过滤 + 失败半量重试 → 仍失败即缺站；
+- vendor 引擎修复：A4 独立来源定级（修「提及次数=来源数」的 confidence 虚高）、信封链校验、档案落盘原子化与根目录、
+  A3 查询矩阵键兼容、检索词去重复品牌。
+
+### 宿主门与创意链路修复
+
+- 门内容落盘送审（`writeGateArtifact`）：监制不再只看到 600 字摘录；
+- AI 监制打回 → **有上限自动重跑**（`VM_PRODUCER_RETRY`，默认 1 次）；
+- 创意主题：营销 Brief + 情报摘要卡进生成输入、类型词表补社媒营销语汇、LLM 提取强制 JSON、Brief 口径（时长/画幅/平台）统一 + 基调护栏；
+- G3 确认单补「需求契约（角色/场景/道具/动作）+ 受众/风险结论摘要」。
+
+### 跑批工具与文档
+
+- 新增 `scripts/tools/data-pipeline-run.mts`：不提交渲染的完整数据管线跑批（产物与 `video.studio.start` 同形，可直接接 `pipeline-audit`）；
+- 新增 `docs/video-pipeline-routing-and-dossier-2026-09-25.md`：分流口径、激活链、逐环节审计证据、遗留项与回滚开关。
+
 ## [base-sync-1.12.0] - 2026-09-02 · 基座同步：技能保鲜环 P1（自动同步 + 上行回流 + 官方运营台）
 
 > 自 workloom-im@1.12.0 同步（vendored 基座公共段一致）：skill-ops P1 完全体（autosync/reflux/console）+ 迁移 0019/0020 + SkillDistBanner 通栏 + skillOps.reflux/console 路由 + 官方端点 + suite Y 域 P1 用例与 R-26 加固 + L2 审批 tier 红线修复（l4_chairman）。

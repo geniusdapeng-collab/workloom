@@ -21,7 +21,7 @@ const autonomyRangeSchema = z.object({
   { message: "自治区间必须满足 lower <= anchor <= upper" },
 );
 
-export const autonomySchema = z.object({
+const autonomySchema = z.object({
   /** 比例/区间边界由 Bundle 命名，例如某类动作相对基准的允许范围。 */
   ranges: z.record(z.string().min(1), autonomyRangeSchema).default({}),
   /** 金额或计数上限由 Bundle 命名，基座只执行通用比较。 */
@@ -29,18 +29,11 @@ export const autonomySchema = z.object({
     label: z.string().min(1).max(80),
     limit: z.number().nonnegative(),
   })).default({}),
-  /**
-   * 枚举型自治白名单由 Bundle 命名（如自动回复可覆盖的意图集合）。
-   * 与 ranges/caps 并列存在的原因：这类边界是"允许集合"而非数值区间，
-   * 放进 ranges/caps 会表达失真；而不给承载字段会让 .strict() 把整段
-   * 自治配置判为非法并静默回落默认值（历史上三端种子即如此失效）。
-   */
-  lists: z.record(z.string().min(1), z.array(z.string().min(1).max(80)).max(50)).default({}),
 })
   // 自治字段是基座治理契约。未知字段不能被 Zod 静默剥离后继续以
   // trial/active 身份运行，否则会把“旧结构”伪装成“空边界”。
   .strict()
-  .default(() => ({ ranges: {}, caps: {}, lists: {} }));
+  .default(() => ({ ranges: {}, caps: {} }));
 
 export const charterSchema = z.object({
   version: z.number().int().default(1),
@@ -87,7 +80,19 @@ export const defaultCharter = (): Charter => charterSchema.parse({});
 
 export function parseCharter(raw: unknown): Charter {
   const r = charterSchema.safeParse(raw ?? {});
-  return r.success ? r.data : defaultCharter();
+  if (r.success) return r.data;
+  // 结构不合法时仍然 fail-closed（回落 disabled），但**绝不静默**：
+  // 历史事故中旧自治结构（price_band / procurement_cap / quote_cap…）被 strict schema 拒绝，
+  // 整片治理能力（晨报/裁决/熔断/绩效/董事会包）无声停摆，只在 E2E 里表现为 21 条互不相干的失败。
+  // 这里把根因一句话报到日志，行业仓换种子/换契约时能立刻看见。
+  if (raw !== null && typeof raw === "object" && Object.keys(raw as Record<string, unknown>).length > 0) {
+    const reason = r.error.issues
+      .slice(0, 3)
+      .map((issue) => `${issue.path.join(".") || "root"}: ${issue.message}`)
+      .join("；");
+    console.warn(`[captain] 宪章结构不合法 → 已按 disabled 兜底（fail-closed）：${reason}`);
+  }
+  return defaultCharter();
 }
 
 /* ================= 治理状态机（纯函数，§12.1） ================= */
@@ -183,8 +188,6 @@ export function effectiveAutonomy(c: Charter): Charter["autonomy"] {
       ...cap,
       limit: Math.floor(cap.limit / 2),
     }])),
-    // 白名单类边界无法"减半"：试用期原样保留，需要收紧时由 Bundle 显式改宪章（不擅自缩权）
-    lists: a.lists,
   };
 }
 
@@ -222,7 +225,6 @@ export function tightenAutonomy(c: Charter): Charter {
       ...cap,
       limit: Math.floor(cap.limit / 2),
     }])),
-    lists: a.lists,
   };
   next.circuit_breaker = { ...next.circuit_breaker, tightened: true };
   next.updated_at = new Date().toISOString();

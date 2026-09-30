@@ -5,7 +5,6 @@
   "type": "module",
   "exports": {
     "./bundles": "./bundles/index.ts",
-    "./connectors": "./connectors/index.ts",
     "./workdata": "./workdata/index.ts",
     "./im-channels": "./im-channels/index.ts",
     "./inspection": "./inspection/index.ts",
@@ -33,6 +32,7 @@
     "./overlay": "./overlay/index.ts",
     "./event-bus": "./event-bus/index.ts",
     "./accounts": "./accounts/index.ts",
+    "./connectors": "./connectors/index.ts",
     "./asset-cms": "./asset-cms/index.ts",
     "./publish-rpa": "./publish-rpa/index.ts",
     "./social-listening": "./social-listening/index.ts",
@@ -56,6 +56,6 @@
   "devDependencies": {
     "@types/pg": "^8.23.1",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.1"
   }
 }

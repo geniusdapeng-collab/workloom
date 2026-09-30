@@ -6,12 +6,24 @@
  * 全部读写经 svcQuery/serviceTx（RLS 事务上下文，L7.1）。
  */
 import { SignJWT, jwtVerify } from "jose";
-import type pg from "pg";
 import { ensureServiceSchema } from "./store.js";
 import { serviceTx, svcQuery } from "./events.js";
 
 export const CHANNELS = ["wechat-mini", "alipay", "h5"] as const;
 export type Channel = (typeof CHANNELS)[number];
+
+/**
+ * S2/MC-207：演示直登（h5/openid 匿名会话）开关解析——网关与发布就绪度共用同一口径，
+ * 避免出现「发布页说演示中、网关却拒绝登录」的两种事实。
+ *  - 开发档：缺省开启（显式 SERVICE_C_DEMO_AUTH=false 可关闭）；
+ *  - 生产档（含桌面自包含运行时 NODE_ENV=production）：一律关闭——出厂/历史 .env 里的 `true`
+ *    不再能打开匿名直登（启动自检在 gateway.ts 打出显式告警）；正式 H5 只认
+ *    SERVICE_C_H5_ENTRY_SECRET + 身份网关签发的短期 entry_token。
+ */
+export function resolveDemoAuth(env: Record<string, string | undefined> = process.env): boolean {
+  if (env.NODE_ENV === "production") return false;
+  return (env.SERVICE_C_DEMO_AUTH ?? "true") === "true";
+}
 
 export interface CUser {
   id: string;
@@ -21,8 +33,6 @@ export interface CUser {
   nickname: string | null;
   memberId: string | null;
   verified: boolean;
-  /** 会员身份核验方式：演示验证码 vs 真实渠道核验（webc 以 identityMode 展示徽标） */
-  identityMode: "demo" | "verified";
   createdAt: string;
 }
 
@@ -92,7 +102,6 @@ function newId(prefix: string): string {
 interface CUserRow extends Record<string, unknown> {
   id: string; workspace_id: string; channel: string; openid: string;
   nickname: string | null; member_id: string | null; phone_hash: string | null;
-  identity_mode: string | null;
   created_at: string;
 }
 
@@ -100,29 +109,8 @@ function toCUser(r: CUserRow): CUser {
   return {
     id: r.id, workspaceId: r.workspace_id, channel: r.channel as Channel, openid: r.openid,
     nickname: r.nickname, memberId: r.member_id, verified: !!r.phone_hash,
-    identityMode: r.identity_mode === "verified" ? "verified" : "demo",
     createdAt: new Date(r.created_at).toISOString(),
   };
-}
-
-/**
- * 身份核验通过后的绑定写回：member_id + phone_hash + 核验方式同一条 UPDATE。
- * 必须在调用方的 serviceTx 内执行，保证与五元事件同一 COMMIT（H2 纪律）。
- */
-export async function bindCUserIdentityOn(
-  client: pg.PoolClient,
-  input: {
-    workspaceId: string; cUserId: string; memberId: string; phoneHash: string;
-    identityMode: "demo" | "verified";
-  },
-): Promise<CUser | null> {
-  const r = await client.query<CUserRow>(
-    `UPDATE c_users SET member_id=$3, phone_hash=$4, identity_mode=$5
-      WHERE workspace_id=$1 AND id=$2
-      RETURNING *`,
-    [input.workspaceId, input.cUserId, input.memberId, input.phoneHash, input.identityMode],
-  );
-  return r.rows[0] ? toCUser(r.rows[0]) : null;
 }
 
 export async function resolveCUser(input: {

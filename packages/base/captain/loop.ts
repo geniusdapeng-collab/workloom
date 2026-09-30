@@ -7,12 +7,12 @@
  * 全部写路径：app 池单事务 + 事务级双 GUC（D16 同构）；事件均带 basis（治理 §九.3 依据链强制）。
  */
 import type pg from "pg";
-import { gatewayAppendOnClient, type ActorInfo } from "@workloom/base/workdata";
+import { gatewayAppendOnClient } from "@workloom/base/workdata";
 import {
   parseCharter, transition, canExecute, isShadow, isExpired,
   evalCircuitBreaker, tightenAutonomy, effectiveAutonomy, type Charter,
 } from "./charter.js";
-import { decideForCaptain, priceContextFromSnapshot, type QueueItem, type CeoVerdict } from "./router.js";
+import { decideForCaptain, type QueueItem, type CeoVerdict } from "./router.js";
 import { classifyDecision, runDeepAnalysis, judgeOutcome, type ExpectedOutcome } from "./decision.js";
 import { buildAgentScorecards, designReplacement } from "./hr.js";
 import { composeBoardPack, scanOrgHealth, proposeHiring } from "./board.js";
@@ -20,30 +20,7 @@ import { generateBriefing, buildMemo, type BriefingKind } from "./briefing.js";
 
 export interface Scope { tenantId: string; workspaceId: string }
 
-/**
- * CEO 节拍的归因主体（actor）必须带**本工作区 company-ceo 岗位声明的围栏绑定**。
- *
- * 网关段①（F2.10）会拒绝「未声明 fence_bindings 的 Agent 发起写类动作」，而 CEO 节拍
- * 全是写类动作（ceo.briefing / captain.mode_change / L2 裁决留痕）。旧实现把 actor 写死成
- * `{ id: "company-ceo", type: "agent" }`（不带绑定），真机发布门禁 T-02 因此整条晨报链被
- * 自家门禁拦下——门禁与事实源必须同源：绑定点哪几条，就从 agents 表读哪几条
- * （组合编制下各工作区不同：融合区 [G17,G18,R17,R18,R19]，单包区只有本包声明）。
- */
-export async function ceoActor(client: pg.PoolClient, scope: Scope): Promise<ActorInfo> {
-  const r = await client.query<{ readonly: boolean; fence_bindings: string[] }>(
-    `SELECT readonly, fence_bindings FROM agents
-      WHERE workspace_id=$1 AND preset_key='company-ceo' LIMIT 1`,
-    [scope.workspaceId],
-  );
-  const row = r.rows[0];
-  return {
-    id: "company-ceo",
-    type: "agent",
-    readonly: row?.readonly ?? false,
-    // 岗位未在编时留空绑定 → 网关按未声明围栏拒绝（fail-closed，不偷放）
-    fenceBindings: row?.fence_bindings ?? [],
-  };
-}
+const CEO_ACTOR = { id: "company-ceo", type: "agent" as const };
 
 /* ================= 宪章读写 ================= */
 
@@ -65,7 +42,7 @@ export async function loadCharter(app: pg.Pool, scope: Scope): Promise<Charter> 
   }
 }
 
-export async function saveCharter(client: pg.PoolClient, scope: Scope, charter: Charter): Promise<void> {
+async function saveCharterInTx(client: pg.PoolClient, scope: Scope, charter: Charter): Promise<void> {
   await client.query(
     `UPDATE profiles SET archive = jsonb_set(archive, '{charter}', $2::jsonb), updated_at=now() WHERE workspace_id=$1`,
     [scope.workspaceId, JSON.stringify(charter)],
@@ -94,11 +71,10 @@ async function emitCeoEvent(
   decision: { params?: Record<string, unknown>; after?: Record<string, unknown>; basis: string[] },
   opts?: { dryRun?: boolean },
 ): Promise<string> {
-  const actor = await ceoActor(client, scope);
   const res = await gatewayAppendOnClient(client, {
-    ...scope, actor, sessionId: `ceo-${scope.workspaceId}`,
+    ...scope, actor: CEO_ACTOR, sessionId: `ceo-${scope.workspaceId}`,
   }, {
-    who: { type: "agent", id: actor.id },
+    who: { type: "agent", id: CEO_ACTOR.id },
     context: { tenant_id: scope.tenantId, workspace_id: scope.workspaceId, time: new Date().toISOString() },
     object: { type: "company_ceo", id: scope.workspaceId },
     decision: {
@@ -119,7 +95,7 @@ async function applyExpiryIfDue(app: pg.Pool, scope: Scope, charter: Charter): P
   if (!isExpired(charter)) return charter;
   const next = transition(charter, { kind: "expire" });
   await inTx(app, scope, async (c) => {
-    await saveCharter(c, scope, next);
+    await saveCharterInTx(c, scope, next);
     await emitCeoEvent(c, scope, "captain.mode_change", {
       params: { from: charter.mode, to: "suspended", reason: "试用/保留期到期自动降级（绝不自动续期，§12 铁律）" },
       basis: [`试用截止 ${charter.grant?.trial_ends_at ?? charter.grant?.retain_until}`],
@@ -166,7 +142,8 @@ export async function runQueueBeat(
     }>(
       `SELECT a.approval_id, a.event_id, a.snapshot
        FROM approvals a WHERE a.workspace_id=$1 AND a.status='pending' AND a.tier='l2_captain'
-         -- B-03 修复：AI 裁决节拍不得批准已过期审批（与 decide() 的过期检查同口径）
+         -- B-03 修复（端口 growth 排雷 T-2026-0929-0003）：AI 裁决节拍不得批准已过期审批
+         -- （与 review-console.decide() 的过期检查同口径）
          AND (a.snapshot->>'expires_at' IS NULL OR (a.snapshot->>'expires_at')::timestamptz > now())
        ORDER BY a.approval_id LIMIT 20`,
       [scope.workspaceId],
@@ -187,14 +164,9 @@ export async function runQueueBeat(
         value: Number.isFinite(Number(snap.autonomy_range_value)) ? Number(snap.autonomy_range_value) : undefined,
       },
       amountCtx: {
-        // 金额既可能来自运行时快照（autonomy_amount），也可能是外部/历史台账直接写在 params.amount：
-        // 两者都识别，且只用于"更严格"的分级（无上限声明 → 重大），不会放宽任何判定。
-        amount: Number.isFinite(Number(snap.autonomy_amount))
-          ? Number(snap.autonomy_amount)
-          : (Number.isFinite(Number(params.amount)) ? Number(params.amount) : undefined),
+        amount: Number.isFinite(Number(snap.autonomy_amount)) ? Number(snap.autonomy_amount) : undefined,
         capKey: typeof snap.autonomy_cap_key === "string" ? snap.autonomy_cap_key : undefined,
       },
-      priceCtx: priceContextFromSnapshot(snap, params),
       irreversible: snap.irreversible === true,
       affectedDomains: Array.isArray(snap.affected_domains)
         ? snap.affected_domains.filter((value): value is string => typeof value === "string")
@@ -252,7 +224,7 @@ ${item.action} ${JSON.stringify(item.params)}
           `UPDATE approvals SET status=$3, gesture=$4::jsonb, decided_by=$5, decided_at=now()
            WHERE approval_id=$1 AND workspace_id=$2 AND status='pending'`,
           [row.approval_id, scope.workspaceId, verdict.kind === "approve" ? "approved" : "rejected",
-           JSON.stringify({ type: verdict.kind, weight: 1, reason_text: verdict.rationale }), "company-ceo"],
+           JSON.stringify({ type: verdict.kind, weight: 1, reason_text: verdict.rationale }), CEO_ACTOR.id],
         );
         applied = (u.rowCount ?? 0) > 0;
         if (applied) decided++;
@@ -272,7 +244,7 @@ ${item.action} ${JSON.stringify(item.params)}
         options: [
           { label: "批准执行", recommended: verdict.kind === "approve" },
           { label: "驳回", recommended: verdict.kind === "reject" },
-          { label: "上浮董事长", recommended: verdict.kind === "escalate" },
+          { label: "上浮老板", recommended: verdict.kind === "escalate" },
         ],
         recommendation: verdict.rationale,
         basis: [
@@ -352,13 +324,13 @@ export async function runBreakerBeat(
   }
   const tightened = tightenAutonomy(charter);
   await inTx(app, scope, async (c) => {
-    await saveCharter(c, scope, tightened);
+    await saveCharterInTx(c, scope, tightened);
     await emitCeoEvent(c, scope, "ceo.circuit_breaker", {
       params: { metric: verdict.metric, actual: verdict.actual, floor: verdict.floor },
       after: { tightened_to: tightened.autonomy },
       basis: [
         `自治期 KPI ${verdict.metric}=${verdict.actual} 跌破宪章下限 ${verdict.floor}（窗口 ${charter.circuit_breaker.window_days} 天）`,
-        "自治边界自动收紧一档并通知董事长（方案 §六：自治权是挣来的，也会被收回）",
+        "自治边界自动收紧一档并通知老板（方案 §六：自治权是挣来的，也会被收回）",
       ],
     });
   });

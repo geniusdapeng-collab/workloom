@@ -32,7 +32,7 @@
     },
     {
       "path": "package.json",
-      "sha256": "fdf0f1df1bc46715442e18b630604fd453fd9811c1db9506fa372b6231958307"
+      "sha256": "bfd61c63beffba4497b37a9e0e4bfc23cc7cd6ab4827a6fcc87f7b2083cc5586"
     },
     {
       "path": "packages/audit-engine/package.json",
@@ -40,7 +40,7 @@
     },
     {
       "path": "packages/base/package.json",
-      "sha256": "d6b309b67a0a23b7465b758210e3647194c44489ad2b9a3e19d68af8ebfe6e2a"
+      "sha256": "2106bbe054445b4ebf0756f331c172984bccc35a56fb07d14cc056bdc55b8d54"
     },
     {
       "path": "packages/db/package.json",
@@ -48,15 +48,15 @@
     },
     {
       "path": "packages/industry-contract/package.json",
-      "sha256": "bd21ee1c58e618051105a46fe08c772eb736f28658d184f26f105564a4862d2c"
+      "sha256": "02b574622c2cd26aa5f1fff3a94c4d45fe4900240943ec38f0c94de6a9c699d5"
     },
     {
       "path": "packages/runtime/package.json",
-      "sha256": "9ec1a6bbfded34938f35b57ea94d9cfdd98ed6b29c93836a86e3df92b123ec81"
+      "sha256": "9baceab0f88d9fd75de5690e2474dcbe1c9a6b56af74e80794a8ac2daebd349a"
     },
     {
       "path": "packages/shared/package.json",
-      "sha256": "26ed5c3a560c35730fe8f84343a83f5e7c3d7d2c488468584acfc524699b4cb2"
+      "sha256": "c9f5275a1929d3c576e5f484c15303c90824ad0e42ea3bfdb3432053c9ba668b"
     },
     {
       "path": "packages/video-studio/package.json",
@@ -64,11 +64,11 @@
     },
     {
       "path": "pnpm-lock.yaml",
-      "sha256": "4867ff054e9f52a1a213881daee8a93b23d002ed326e61e96b58a9276cfc089f"
+      "sha256": "b5c89792cb4fc8f1d5224ac207980084bdd0dd74ef5c9e3191dc0583cb8af30c"
     },
     {
       "path": "product.manifest.json",
-      "sha256": "1aa6bf2b967cf3e7f88f024ff913a3633fb17737a54c3f495872f6c56b008df9"
+      "sha256": "a94f04b4e1a11f28a146d4b0317ae14e1b37ca3ba3850083189a979b2ff49644"
     },
     {
       "path": "scripts/pack-nm-merge.mjs",
@@ -88,5 +88,5 @@
     }
   ],
   "manifestSha256": "3cbc0c168f98c6200152d8b6cb98c200fca4d202a4880523857626b3b7694729",
-  "packageLockSha256": "10c51662480d80fe8754468bbc2b2d28f0aca2bafcefbfc7a5d6934b0a07c8bf"
+  "packageLockSha256": "58f8b6ccfffc3874c2262df36d923435dbaad4d4c680ab23c1e7a3044cc6737c"
 }

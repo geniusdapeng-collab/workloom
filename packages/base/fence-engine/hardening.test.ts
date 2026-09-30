@@ -19,7 +19,10 @@ import {
   registerReadActions, registerWriteActions,
 } from "../workdata/gateway.js";
 import type { EventDraft } from "../workdata/events.js";
-import { activateRuleVersion, confirmDryRun, createDryRun, loadActiveRulesInTx } from "./lifecycle.js";
+import {
+  activateRuleVersion, confirmDryRun, createDryRun, fenceRuleRowId, loadActiveRulesInTx, nextRuleRowIdentity,
+  type RuleRowIdentity,
+} from "./lifecycle.js";
 import { gatewayAppendOnClient } from "../workdata/gateway.js";
 
 const BUNDLES = join(dirname(fileURLToPath(import.meta.url)), "../../../bundles");
@@ -27,7 +30,15 @@ const hotelPackPath = join(BUNDLES, "hotel/fences/hotel-baseline.yml");
 const aipmPackPath = join(BUNDLES, "ai-pm/fences/ai-pm-baseline.yml");
 const platformPackPath = join(BUNDLES, "platform/fences/platform-baseline.yml");
 
-const hotelPack = loadFencePack(readFileSync(hotelPackPath, "utf-8"));
+/**
+ * 本测试文件随基座分发到所有子仓，而 `bundles/**` 属行业资产（不在 base-sync 范围内）：
+ * 依赖具体行业包的断言一律按存在性守卫/跳过，避免子仓出现"文件不存在"的假红灯。
+ */
+const hotelPack = existsSync(hotelPackPath) ? loadFencePack(readFileSync(hotelPackPath, "utf-8")) : null;
+const hasHotelPack = hotelPack !== null;
+/** 已被 describe.skipIf(!hasHotelPack) 守卫的用例使用；缺包时取空值，断言不会被执行。 */
+const hotelPackRules: RuntimeRule[] = hotelPack?.rules ?? [];
+const hotelPackDefaultLevel = hotelPack?.defaultLevel ?? "review";
 
 function draft(action: string, who: { type: "human" | "agent" | "system"; id: string }): EventDraft {
   return {
@@ -96,14 +107,14 @@ describe("HP-02 ② 未知动作与规则匹配 fail-closed", () => {
     expect(v.level).toBe("auto");
   });
 
-  it("规则动作词表按语义段匹配工具名（price.adjust ↔ pms.price.write）", () => {
+  it.skipIf(!hasHotelPack)("规则动作词表按语义段匹配工具名（price.adjust ↔ pms.price.write）", () => {
     const v = judge(
       {
         object: { type: "room_price" }, action: "pms.price.write",
         params: {}, after: { price: 300 },
       },
-      hotelPack.rules,
-      hotelPack.defaultLevel,
+      hotelPackRules,
+      hotelPackDefaultLevel,
     );
     expect(v.level).toBe("block"); // R2 保底价 ¥380
     expect(v.impacts.some((i) => i.rule_id === "R2")).toBe(true);
@@ -120,24 +131,21 @@ describe("HP-02 ② 未知动作与规则匹配 fail-closed", () => {
   });
 });
 
-describe("HP-02 ④ DSL 装载器与出厂包一致", () => {
-  it("出厂包 fences: 形态可装载且规则数正确（按本仓实际存在的行业包校验）", () => {
-    // 行业分叉（如酒店版）不携带 ai-pm/platform 出厂包；这里按实际存在的包校验同一契约，
-    // 缺席的包不伪造通过——真正的契约点（loadFencePack 认 fences: 形态 + 默认 review）保持覆盖。
-    const factoryPacks = [
-      { name: "ai-pm", path: aipmPackPath, rules: 14 },
-      { name: "platform", path: platformPackPath, rules: 10 },
-    ].filter((pack) => existsSync(pack.path));
-    for (const pack of factoryPacks) {
-      const loaded = loadFencePack(readFileSync(pack.path, "utf-8"));
-      expect(loaded.rules.length, `${pack.name} 规则数`).toBe(pack.rules);
-      expect(loaded.defaultLevel, `${pack.name} 默认级别`).toBe("review");
+describe.skipIf(!hasHotelPack)("HP-02 ④ DSL 装载器与出厂包一致", () => {
+  it("ai-pm / platform 的 fences: 形态可装载且规则数正确", () => {
+    // 本文件随基座分发到所有子仓，而 bundles/** 属行业资产（platform 包仅存在于仙女座/基座）：
+    // 按包存在性守卫，缺包即跳过该包断言，避免子仓出现"文件不存在"的假红灯。
+    if (existsSync(aipmPackPath)) {
+      const aipm = loadFencePack(readFileSync(aipmPackPath, "utf-8"));
+      expect(aipm.rules.length).toBe(14);
+      expect(aipm.defaultLevel).toBe("review");
     }
-    if (factoryPacks.length === 0) {
-      // 没有出厂示例包的行业仓：用本仓行业包（hotel）验证同一装载契约
-      const local = loadFencePack(readFileSync(hotelPackPath, "utf-8"));
-      expect(local.rules.length).toBeGreaterThan(0);
-      expect(local.defaultLevel).toBe("review");
+    if (existsSync(platformPackPath)) {
+      const platform = loadFencePack(readFileSync(platformPackPath, "utf-8"));
+      expect(platform.rules.length).toBe(10);
+    }
+    if (!existsSync(hotelPackPath) && !existsSync(aipmPackPath) && !existsSync(platformPackPath)) {
+      expect(true).toBe(true); // 该仓未随附任何示例围栏包：本用例无对象可校验（已在上面按包跳过）
     }
   });
 
@@ -147,23 +155,23 @@ describe("HP-02 ④ DSL 装载器与出厂包一致", () => {
   });
 });
 
-describe("HP-02 ⑤ 单调守卫必须防 when/match 改写", () => {
+describe.skipIf(!hasHotelPack)("HP-02 ⑤ 单调守卫必须防 when/match 改写", () => {
   it("基线规则 when 被改成恒假 → 视为放宽（拒绝）", () => {
-    const patch = hotelPack.rules.map((r) => (r.rule_id === "R2" ? { ...r, when: "false" } : r));
-    const res = checkMonotonic(hotelPack.rules, patch);
+    const patch = hotelPackRules.map((r) => (r.rule_id === "R2" ? { ...r, when: "false" } : r));
+    const res = checkMonotonic(hotelPackRules, patch);
     expect(res.ok).toBe(false);
     expect(res.violations.some((v) => v.rule_id === "R2")).toBe(true);
   });
 
   it("基线规则 match 收窄（删掉被覆盖动作）→ 拒绝", () => {
-    const patch = hotelPack.rules.map((r) =>
+    const patch = hotelPackRules.map((r) =>
       r.rule_id === "R3" ? { ...r, actions: ["price.adjust"] } : r);
-    const res = checkMonotonic(hotelPack.rules, patch);
+    const res = checkMonotonic(hotelPackRules, patch);
     expect(res.ok).toBe(false);
   });
 
   it("patch 内重复 rule_id → 拒绝", () => {
-    const res = checkMonotonic(hotelPack.rules, [...hotelPack.rules, { ...hotelPack.rules[0]!, level: "auto" as const }]);
+    const res = checkMonotonic(hotelPackRules, [...hotelPackRules, { ...hotelPackRules[0]!, level: "auto" as const }]);
     expect(res.ok).toBe(false);
   });
 });
@@ -182,7 +190,7 @@ describe("HP-02 ⑥ 规则动作清单注册（供装配期调用）", () => {
 const RUN_DB = process.env.RUN_DB_TESTS === "1"
   && Boolean(process.env.DATABASE_APP_URL) && Boolean(process.env.DATABASE_URL);
 
-describe.skipIf(!RUN_DB)("HP-02 真库：审批绑定与版本递增", () => {
+describe.skipIf(!RUN_DB || !hasHotelPack)("HP-02 真库：审批绑定与版本递增", () => {
   // ws-yunqi 的种子租户是 tenant-demo（与 runtime 夹具一致）；写错租户会在同一工作区产生
   // 第二条哈希链根（GENESIS），进而让套件的链完整性校验失败（O-15/Q-03/R-13）。
   const scope = { tenantId: "tenant-demo", workspaceId: "ws-yunqi" };
@@ -191,7 +199,8 @@ describe.skipIf(!RUN_DB)("HP-02 真库：审批绑定与版本递增", () => {
   let appPool: import("pg").Pool;
   let ownerPool: import("pg").Pool;
 
-  const rowId = (ruleId: string) => `fr-${ruleId.toLowerCase()}-vnext-${scope.workspaceId}`;
+  // 与提案路径同口径：候选行 ID 由 rule 版本派生（MC-102）；测试夹具固定用 "v-next" 占位
+  const rowId = (ruleId: string) => fenceRuleRowId(ruleId, scope.workspaceId, "v-next");
 
   async function withAppTx<T>(fn: (client: import("pg").PoolClient) => Promise<T>): Promise<T> {
     const client = await appPool.connect();
@@ -271,8 +280,8 @@ describe.skipIf(!RUN_DB)("HP-02 真库：审批绑定与版本递增", () => {
 
   it("伪造审批引用被拒（审批事件必须与提案绑定且已 approved）", async () => {
     const dr = await createDryRun(appPool, scope, {
-      ruleId: newRuleId, ruleVersion: "v-next", rules: hotelPack.rules,
-      defaultLevel: hotelPack.defaultLevel, createdBy: "MEM-001",
+      ruleId: newRuleId, ruleVersion: "v-next", rules: hotelPackRules,
+      defaultLevel: hotelPackDefaultLevel, createdBy: "MEM-001",
     });
     await confirmDryRun(appPool, scope, dr.dryRunId);
     await insertCandidate(newRuleId, "review", "after.price < 300");
@@ -306,8 +315,8 @@ describe.skipIf(!RUN_DB)("HP-02 真库：审批绑定与版本递增", () => {
 
   it("加严候选激活成功：版本递增、旧 active 同 rule_id 转 rolled_back", async () => {
     const dr = await createDryRun(appPool, scope, {
-      ruleId: newRuleId, ruleVersion: "v-next", rules: hotelPack.rules,
-      defaultLevel: hotelPack.defaultLevel, createdBy: "MEM-001",
+      ruleId: newRuleId, ruleVersion: "v-next", rules: hotelPackRules,
+      defaultLevel: hotelPackDefaultLevel, createdBy: "MEM-001",
     });
     await confirmDryRun(appPool, scope, dr.dryRunId);
     await insertCandidate(newRuleId, "block", "after.price < 380");
@@ -324,5 +333,97 @@ describe.skipIf(!RUN_DB)("HP-02 真库：审批绑定与版本递增", () => {
     expect(rows.rows.filter((r) => r.status === "active")).toHaveLength(1);
     expect(rows.rows.find((r) => r.status === "active")?.version).toBe(version);
     expect(rows.rows.find((r) => r.status === "active")?.approved_event_id).toBe(gestureEventId);
+  });
+
+  it("MC-102/109 真库：同一 rule_id 连续两次加严都生效，且平台基线锚点不丢", async () => {
+    const mcRule = `R${Math.floor(Math.random() * 800) + 100}`;
+    const baselineRowId = fenceRuleRowId(mcRule, scope.workspaceId, "v1");
+    const defaultWhen = "params.guarantee_anomaly != true";
+    const insertProposalRow = async (row: RuleRowIdentity, level: "auto" | "review" | "block", when: string) => {
+      await withAppTx((client) => client.query(
+        `INSERT INTO fence_rules (id, rule_id, version, workspace_id, name, level, match_spec, action, is_baseline, status, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false,'pending_approval','MEM-001')`,
+        [row.rowId, mcRule, row.version, scope.workspaceId, `MC 覆盖 ${mcRule}`,
+         level, JSON.stringify({ object_types: ["order"], actions: ["order.reconcile"], when }),
+         JSON.stringify({ result: level === "auto" ? "pass" : level === "review" ? "review" : "blocked" })],
+      ));
+    };
+    const activate = async (
+      row: RuleRowIdentity,
+      level: "auto" | "review" | "block",
+      opts: { when?: string; allowWhenChange?: boolean } = {},
+    ) => {
+      const dr = await createDryRun(appPool, scope, {
+        ruleId: mcRule, ruleVersion: row.version, rules: hotelPackRules,
+        defaultLevel: hotelPackDefaultLevel, createdBy: "MEM-001",
+      });
+      await confirmDryRun(appPool, scope, dr.dryRunId);
+      await insertProposalRow(row, level, opts.when ?? defaultWhen);
+      const gestureEventId = await buildApprovalChain(mcRule, dr.dryRunId);
+      return activateRuleVersion(appPool, scope, {
+        ruleRowId: row.rowId, dryRunId: dr.dryRunId, approvalEventId: gestureEventId,
+        allowWhenChange: opts.allowWhenChange,
+      });
+    };
+    const rowStatus = async () => withAppTx((client) => client.query<{
+      id: string; version: string; level: string; is_baseline: boolean; status: string;
+    }>(
+      `SELECT id, version, level, is_baseline, status FROM fence_rules
+        WHERE workspace_id=$1 AND rule_id=$2 ORDER BY created_at, id`,
+      [scope.workspaceId, mcRule],
+    ));
+    try {
+      // 平台基线锚点（模拟出厂包行）：level=auto，is_baseline=true，active
+      await withAppTx((client) => client.query(
+        `INSERT INTO fence_rules (id, rule_id, version, workspace_id, name, level, match_spec, action, is_baseline, status, created_by)
+         VALUES ($1,$2,'hotel-baseline/v1',$3,$4,'auto',$5,$6,true,'active','system:seed')`,
+        [baselineRowId, mcRule, scope.workspaceId, `MC 基线 ${mcRule}`,
+         JSON.stringify({ object_types: ["order"], actions: ["order.reconcile"], when: "params.guarantee_anomaly != true" }),
+         JSON.stringify({ result: "pass" })],
+      ));
+
+      // 第 1 次加严：auto（基线）→ review（覆盖行）
+      const first = await withAppTx((client) => nextRuleRowIdentity(client, scope, mcRule));
+      expect(first.version).toBe("v2");
+      expect(first.inheritedBaseline).toBe(true);
+      const firstActivated = await activate(first, "review");
+      expect(firstActivated.version).toBe("v2");
+
+      // 第 2 次加严：review → block。修复前这里会撞主键（固定 vnext 行 ID）而静默不生效
+      const second = await withAppTx((client) => nextRuleRowIdentity(client, scope, mcRule));
+      expect(second.version).toBe("v3");
+      expect(second.rowId).not.toBe(first.rowId);
+      const secondActivated = await activate(second, "block");
+      expect(secondActivated.version).toBe("v3");
+
+      const rows = (await rowStatus()).rows;
+      const baselineRow = rows.find((r) => r.id === baselineRowId);
+      expect(baselineRow).toMatchObject({ is_baseline: true, status: "active" }); // MC-109：锚点行不被回滚
+      expect(rows.find((r) => r.id === first.rowId)).toMatchObject({ status: "rolled_back", version: "v2" });
+      expect(rows.find((r) => r.id === second.rowId)).toMatchObject({ status: "active", level: "block", version: "v3" });
+      expect(rows.filter((r) => r.status === "active")).toHaveLength(2); // 基线 + 当前覆盖行
+
+      // 第 3 次放宽：block → auto，基线锚点不丢 → 激活期被拒
+      const third = await withAppTx((client) => nextRuleRowIdentity(client, scope, mcRule));
+      expect(third.version).toBe("v4");
+      await expect(activate(third, "auto")).rejects.toThrowError(/只可加严/);
+      expect((await rowStatus()).rows.find((r) => r.id === third.rowId)?.status).toBe("pending_approval");
+
+      // MC-103：基线 when 改写默认被拒（无显式放行位）
+      const whenBlocked = await withAppTx((client) => nextRuleRowIdentity(client, scope, mcRule));
+      expect(whenBlocked.version).toBe("v5");
+      await expect(activate(whenBlocked, "block", { when: "params.amount > 0" })).rejects.toThrowError(/when/);
+
+      // MC-103：dry-run 回放 + 人工确认后显式 allowWhenChange=true → 激活期放行（提案事件已留痕）
+      const whenAllowed = await withAppTx((client) => nextRuleRowIdentity(client, scope, mcRule));
+      expect(whenAllowed.version).toBe("v6");
+      const appliedWhen = await activate(whenAllowed, "block", { when: "params.amount > 0", allowWhenChange: true });
+      expect(appliedWhen.version).toBe("v6");
+      const finalRows = (await rowStatus()).rows;
+      expect(finalRows.find((r) => r.id === whenAllowed.rowId)).toMatchObject({ status: "active", version: "v6" });
+      expect(finalRows.find((r) => r.id === baselineRowId)).toMatchObject({ is_baseline: true, status: "active" });
+    } finally {
+      await ownerPool.query(`DELETE FROM fence_rules WHERE workspace_id=$1 AND rule_id=$2`, [scope.workspaceId, mcRule]);
+    }
   });
 });

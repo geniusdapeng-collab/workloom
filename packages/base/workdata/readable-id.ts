@@ -1,7 +1,7 @@
 /**
  * 可读编号（T-104 / VID-1042）取号与落库的**唯一机制入口**。
  *
- * 为什么要有这个模块（2026-09-29 第二次修复，GR-02 复发复盘）：
+ * 为什么要有这个模块（2026-09-29 二次修复，GR-02 复发复盘，来自 WorkLoom-growth 独立验收）：
  *   号源历史上被改过两轮——0048 改纯 `nextval`（原子，但种子/手写 id 领先序列时撞号），
  *   0050 又加回 `GREATEST(nextval, max(...))`（把原子性交还给了 max 竞争，12 路并发实测 1 个 500）。
  *   两次都是在"函数里做文章"，没有任何一处**可复用的取号+落库**口径，于是每个调用点各写各的
@@ -88,13 +88,15 @@ export async function insertWithReadableId<T>(
  * 何时调用：**手写 id 的写入方**（种子/回填脚本/迁移）跑完之后。放在这里而不是取号函数里，
  * 是因为取号函数一旦读 `max()` 就把并发原子性交还给了 max 竞争——0050 的翻车点。
  * 用 `GREATEST(现值, 现存最大)` 保证不会把序列往回拨。
+ *
+ * `videoProjects` 默认跟随"本仓是否存在 video_projects 表"（基座无视频模块时自动跳过）。
  */
 export async function alignReadableIdSequences(
   client: pg.PoolClient,
-  options: { threads?: boolean; videoProjects?: boolean } = { threads: true, videoProjects: true },
+  options: { threads?: boolean; videoProjects?: boolean } = { threads: true },
 ): Promise<{ threads: number | null; videoProjects: number | null }> {
   const out: { threads: number | null; videoProjects: number | null } = { threads: null, videoProjects: null };
-  if (options.threads) {
+  if (options.threads !== false) {
     const r = await client.query<{ v: string }>(
       `SELECT setval('public.thread_no_seq',
                       GREATEST((SELECT last_value FROM public.thread_no_seq),
@@ -104,7 +106,7 @@ export async function alignReadableIdSequences(
     );
     out.threads = Number(r.rows[0]?.v);
   }
-  if (options.videoProjects) {
+  if (options.videoProjects === true) {
     const r = await client.query<{ v: string }>(
       `SELECT setval('public.video_project_no_seq',
                       GREATEST((SELECT last_value FROM public.video_project_no_seq),

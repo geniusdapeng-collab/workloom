@@ -1,7 +1,6 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -25,7 +24,6 @@ const {
   openExternalUrl,
   acquireBootstrapLock,
   tarExtractionPlan,
-  withBundledNodePath,
 } = require("./bootstrap.cjs");
 
 function assertPrivateFile(file) {
@@ -222,12 +220,10 @@ describe("桌面载荷原子装配", () => {
   it("发布渲染冒烟使用稳定动作标记走完真实欢迎流程", () => {
     const mainSource = fs.readFileSync(path.join(__dirname, "main.cjs"), "utf8");
     const welcomeSource = fs.readFileSync(path.join(__dirname, "../../web/src/components/WelcomeCeremony.tsx"), "utf8");
-    // 2026-09-20：仪式收尾的 V4 主弹窗（enter-system 按钮行）已删除；
-    // 冒烟只保留「直接进入」这一个稳定动作，随后等待欢迎覆盖层消失。
-    assert.ok(mainSource.includes('data-welcome-action="skip-team"'));
-    assert.ok(welcomeSource.includes('data-welcome-action="skip-team"'));
-    assert.doesNotMatch(mainSource, /data-welcome-action="enter-system"/u);
-    assert.doesNotMatch(welcomeSource, /data-welcome-action="enter-system"/u);
+    for (const action of ["skip-team", "enter-system"]) {
+      assert.ok(mainSource.includes(`data-welcome-action="${action}"`));
+      assert.ok(welcomeSource.includes(`data-welcome-action="${action}"`));
+    }
     assert.doesNotMatch(mainSource, /textContent\?\.includes\(['"](?:跳过仪式|进入系统)/u);
   });
 });
@@ -335,32 +331,6 @@ describe("桌面 PostgreSQL 实例归属与端口契约", () => {
       assert.equal(new URL(value).hostname, "127.0.0.1");
       assert.equal(new URL(value).port, "55432");
     }
-  });
-});
-
-describe("桌面本机渲染子进程的 Node 路径", () => {
-  it("干净 GUI PATH 下仍能启动当前随包 Node，且保留系统工具路径", () => {
-    const pathKey = process.platform === "win32" ? "Path" : "PATH";
-    const inheritedPath = process.platform === "win32" ? "C:\\Windows\\System32" : "/usr/bin:/bin";
-    const baseEnv = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toLowerCase() !== "path"));
-    const env = withBundledNodePath({ ...baseEnv, [pathKey]: inheritedPath }, process.execPath);
-    assert.equal(env[pathKey], `${path.dirname(process.execPath)}${path.delimiter}${inheritedPath}`);
-    const child = spawnSync("node", ["-p", "process.execPath"], { env, encoding: "utf8" });
-    assert.equal(child.status, 0, String(child.stderr || child.error || ""));
-    assert.equal(fs.realpathSync(child.stdout.trim()), fs.realpathSync(process.execPath));
-  });
-
-  it("Windows 只传一个不区分大小写的 Path；POSIX 不改其他同名变量", () => {
-    const win = withBundledNodePath(
-      { Path: "C:\\Windows\\System32", PATH: "C:\\shadow", KEEP: "yes" },
-      "C:\\Program Files\\WorkLoom\\node\\node.exe", "win32",
-    );
-    assert.equal(win.Path, "C:\\Program Files\\WorkLoom\\node;C:\\Windows\\System32");
-    assert.equal(Object.keys(win).filter((key) => key.toLowerCase() === "path").length, 1);
-    assert.equal(win.KEEP, "yes");
-    const posix = withBundledNodePath({ PATH: "/usr/bin", Path: "preserve" }, "/opt/workloom/node/bin/node", "darwin");
-    assert.equal(posix.PATH, "/opt/workloom/node/bin:/usr/bin");
-    assert.equal(posix.Path, "preserve");
   });
 });
 

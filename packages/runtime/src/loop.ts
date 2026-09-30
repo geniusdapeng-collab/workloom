@@ -12,7 +12,7 @@
  */
 import type pg from "pg";
 import { createHash } from "node:crypto";
-import { judge, judgeViews, type JudgeInput, type RuntimeRule, type RuleImpact } from "@workloom/base/fence-engine";
+import { judge, judgeViews, type JudgeView, type RuntimeRule, type RuleImpact } from "@workloom/base/fence-engine";
 import { gatewayAppend, gatewayAppendOnClient, registerWriteActions } from "@workloom/base/workdata";
 
 /** D16（#1/A）：步骤内「事件 + 线程状态」单事务封装（双 GUC 齐备） */
@@ -779,15 +779,46 @@ export async function runQuest(
       && toolAccess === "write";
     const planUnverified = needsHumanCheck && step.context?.plan_unverified === true && step.context?.params_incomplete !== true;
     const paramsIncomplete = needsHumanCheck;
-    const views: JudgeInput[] = [{
+    const views: JudgeView[] = [{
       object: { type: step.objectType, id: step.objectId }, action: step.action, effect: toolAccess,
       params: step.params, before: step.before, after: step.after, context: step.context,
     }];
     if (step.tool && step.tool !== step.action) {
+      /**
+       * 执行真相视图（第二视图）：**真实工具 × 步骤声明的对象**，标 `failClosed: true`。
+       * 它承担红队复核要求的那条保证：真正执行的工具没有被任何规则覆盖时，不能被语义视图的
+       * auto 命中冲淡（T-113：action=publish_article 命中 auto，真实工具 ai_task.emit 无规则）。
+       *
+       * 对象类型沿用 `step.objectType` 而不是派生类型——判定器的 `actionMatches` 本来就支持
+       * 命名空间后缀扩展（规则 `price.adjust` 命中真实工具 `pms.price.write`，实测确认），
+       * 因此"声明对象 + 真实工具动作"才是能与规则词表对齐的真相视图。
+       */
       views.push({
         object: { type: step.objectType, id: step.objectId }, action: step.tool, effect: toolAccess,
         params: step.params, before: step.before, after: step.after, context: step.context,
+        failClosed: true,
       });
+      /**
+       * 第三视图：按**工具名前缀**派生对象视图（与默认规划器 `safeObjectType(tool.name)` 同口径）。
+       * 2026-09-24 修复（P 域实测）：LLM 规划器会自造对象标识（如 geo_article），而围栏规则按
+       * 声明对象（content / geo_content…）与动词族编写 → 语义视图与工具视图都用自造对象类型时必然全不命中，
+       * 写步骤一律落 default review（实测 T-104..T-107 全挂）。补上派生视图后，已声明工具（如 content.*）
+       * 能被对应规则正常命中；未命中任何视图时仍按 default fail-closed。
+       *
+       * 视图角色（2026-09-29 修口）：派生对象类型是**启发式标签**（`pms.price.write` → `price`），
+       * 只能做加严——命中规则就参与取最严，**未命中不回落 default**。否则只要工具名的命名空间与
+       * 步骤声明对象不同名，就会把已声明工具的正常步骤一律推成 review（本轮实测：hotel 调价步骤
+       * `room_price × pms.price.write` 命中 R1 auto，却被派生视图 `price` 未命中拖成 pending_review，
+       * `packages/runtime/src/runtime.test.ts` 的 3 步自动执行用例直接红）。
+       * 真正兜底的 fail-closed 由上面第二视图承担，语义不变。
+       */
+      const toolObjectType = safeObjectType(step.tool);
+      if (toolObjectType && toolObjectType !== step.objectType) {
+        views.push({
+          object: { type: toolObjectType, id: step.objectId }, action: step.tool, effect: toolAccess,
+          params: step.params, before: step.before, after: step.after, context: step.context,
+        });
+      }
     }
     const rawVerdict: { level: "auto" | "review" | "block"; impacts: RuleImpact[]; triggeredBy: string[]; evalErrors: string[] } = paramsIncomplete
       ? { level: "review", impacts: [], triggeredBy: [], evalErrors: [] }
@@ -959,9 +990,18 @@ export async function runQuest(
            ON CONFLICT (event_id, channel) DO NOTHING`,
           [aprId, scope.tenantId, scope.workspaceId, ev.eventId,
             JSON.stringify({
+              /**
+               * 关卡事实（2026-09-24 补）：UI/巡检要按"这是不是步骤级人审关卡"筛选，
+               * 而不能按 LLM 自造的动作名猜——实测 `publish_article` 这种自造名不在任何
+               * 命名白名单里，任务页会把**真实待放行**的关卡卡过滤掉（人看不到、放不了行）。
+               * 这里显式落 gate/tool/rule_ids/step_id，前端按 gate=true 判定。
+               */
+              gate: true,
               /** GR-01：审批与「被批准的那一步」的指纹绑定（replay 时比对，防漂移消费） */
               step_fingerprint: fingerprint,
               tool: step.tool,
+              step_id: step.stepId,
+              rule_ids: verdict.impacts.map((i) => i.rule_id),
               before: step.before ?? null,
               /** GR-08：真正的"变更后值"在 step.after；无 after 时才回落到 params（不再把 params 当 after） */
               after: step.after ?? step.params ?? null,
@@ -1004,11 +1044,11 @@ export async function runQuest(
                * 举一反三（与 Y-01 同类）：任务页审批卡会渲染 snapshot.rule_version（「命中关联围栏」），
                * 但生产路径从未写过该字段——只有测试构造过。这里按本次判定影响面写入，
                * 无命中规则时写 default_level 口径，保证 UI 语义诚实（不强说"命中规则"）。
+               * rule_ids 已在关卡事实段（gate/tool/step_id 旁）落一次，此处不重复。
                */
               rule_version: verdict.impacts.length
                 ? verdict.impacts.map((impact) => `${impact.rule_id}@${impact.version}`).join(", ")
                 : `default_level=${defaultLevel}`,
-              rule_ids: verdict.impacts.map((impact) => impact.rule_id),
               irreversible: step.context?.irreversible === true,
               affected_domains: Array.isArray(step.context?.affected_domains) ? step.context.affected_domains : [],
               expires_at: new Date(Date.now() + 24 * 3600e3).toISOString(),

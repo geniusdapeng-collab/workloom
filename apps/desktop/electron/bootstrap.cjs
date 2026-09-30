@@ -83,23 +83,6 @@ function spawnLogged(cmd, args, opts, logFile) {
   return child;
 }
 
-// The server starts from our bundled Node by absolute path, but some local renderers
-// start their own `node` child. A GUI launch may inherit no system Node in PATH.
-function withBundledNodePath(env, nodeBin, platform = process.platform) {
-  const pathApi = platform === "win32" ? path.win32 : path.posix;
-  if (!pathApi.isAbsolute(nodeBin)) throw new Error(`内置 Node 路径必须为绝对路径：${nodeBin}`);
-  const next = { ...env };
-  const pathKeys = Object.keys(next).filter((key) => platform === "win32" ? key.toLowerCase() === "path" : key === "PATH");
-  const pathKey = pathKeys[0] ?? (platform === "win32" ? "Path" : "PATH");
-  const inheritedPath = next[pathKey] || "";
-  // Windows environment keys are case insensitive; keep one PATH spelling so a
-  // duplicate key cannot hide the bundled runtime when child_process spawns.
-  for (const key of pathKeys) delete next[key];
-  const delimiter = platform === "win32" ? ";" : ":";
-  next[pathKey] = [pathApi.dirname(nodeBin), inheritedPath].filter(Boolean).join(delimiter);
-  return next;
-}
-
 function killTree(child) {
   if (!child || child.killed) return;
   try {
@@ -377,6 +360,12 @@ function buildDesktopEnvironment(text, {
   adminPassword,
   appPassword,
   gatewayPassword,
+  /**
+   * 载荷运行时目录（绝对路径）。GR-15 的执行器注册表要从载荷内桥源码派生，
+   * 因此必须由调用方传入——原先直接引用外层函数的 `RUNTIME` 常量，
+   * 在测试/独立调用路径下是未定义变量（ReferenceError，基座桌面用例实测命中）。
+   */
+  runtimeDir,
 }) {
   const values = {
     DATABASE_URL: databaseUrl("postgres", adminPassword, pgPort),
@@ -392,7 +381,8 @@ function buildDesktopEnvironment(text, {
    * 没有这一行，桌面上任何含写步骤的 quest 都会落 `connector-required`（未核实）而无法交付。
    * 规格与端口/工具名都从载荷内的桥源码派生（bundle 增删桥后无需改本文件）。
    */
-  const toolExecutorModules = resolveToolExecutorModules(RUNTIME);
+  // 未传 runtimeDir（独立调用/单测场景）时跳过注入：宁可少一行约定，也不抛 ReferenceError/TypeError
+  const toolExecutorModules = runtimeDir ? resolveToolExecutorModules(runtimeDir) : null;
   if (toolExecutorModules) values.WORKLOOM_TOOL_EXECUTOR_MODULES = toolExecutorModules;
   let next = text;
   for (const [key, value] of Object.entries(values)) next = upsertEnvValue(next, key, value);
@@ -957,13 +947,21 @@ async function bootstrap(opts) {
   if (!envExisted) {
     const jwtValue = `wl-${crypto.randomBytes(24).toString("hex")}`;
     const piiValue = `pii-${crypto.randomBytes(24).toString("hex")}`;
+    // MC-208：C 端会话签名密钥必须与 JWT/PII 同一纪律随机化——否则所有安装共用出厂常量，
+    // 本机任意进程可伪造 c-token（服务虽只绑回环，但同类风险已在 M4 实测记录）。
+    const cSecretValue = `c-${crypto.randomBytes(24).toString("hex")}`;
     envText = upsertEnvValue(envText, "JWT_SECRET", jwtValue);
     envText = upsertEnvValue(envText, "PII_SALT", piiValue);
+    envText = upsertEnvValue(envText, "SERVICE_C_SECRET", cSecretValue);
   }
+  // MC-207：桌面自包含运行时按生产档（NODE_ENV=production）拉起 server，演示直登开关必须落盘为 false；
+  // 历史安装里遗留的 true 由服务端生产档强制忽略并自检告警，这里同时把配置纠正到位。
+  envText = upsertEnvValue(envText, "SERVICE_C_DEMO_AUTH", "false");
   const adminPassword = databaseState.credentials.owner;
   const appPassword = databaseState.credentials.app;
   const gatewayPassword = databaseState.credentials.gateway;
   const desktopConfig = buildDesktopEnvironment(envText, {
+    runtimeDir: RUNTIME,
     pgPort: PG_PORT,
     serverPort: SERVER_PORT,
     webPort: WEB_PORT,
@@ -975,7 +973,7 @@ async function bootstrap(opts) {
   else {
     try { fs.chmodSync(envFile, 0o600); } catch { /* Windows 不保证 POSIX mode */ }
   }
-  if (!envExisted) say("→ 生成默认配置 .env（JWT 密钥与 PII 盐已随机化）");
+  if (!envExisted) say("→ 生成默认配置 .env（JWT / PII / C 端会话密钥已随机化，演示直登已关闭）");
   const desktopEnv = {
     ...process.env,
     ...desktopConfig.values,
@@ -984,7 +982,7 @@ async function bootstrap(opts) {
     WORKLOOM_WEB_PORT: String(WEB_PORT),
     WORKLOOM_NATS_PORT: String(NATS_PORT),
   };
-  const serverEnv = withBundledNodePath({ ...desktopEnv, NODE_ENV: "production" }, NODE_BIN);
+  const serverEnv = { ...desktopEnv, NODE_ENV: "production" };
   const runDatabaseHelper = (mode, legacyPasswords = []) => run(NODE_BIN, [DB_HELPER], {
     env: {
       ...desktopEnv,
@@ -1289,5 +1287,4 @@ module.exports = {
   openExternalUrl,
   acquireBootstrapLock,
   tarExtractionPlan,
-  withBundledNodePath,
 };

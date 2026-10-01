@@ -269,3 +269,9 @@ git diff --check
 ## 许可证
 
 主仓许可证见 [Apache-2.0 LICENSE](LICENSE)。第三方组件与 vendor 资产分别遵循其许可证和使用条件；清单见 [OPEN_SOURCE_COMPONENTS.md](docs/OPEN_SOURCE_COMPONENTS.md) 与 [oss-components.json](oss-components.json)。
+
+## 桌面 Agent 接入（Codex / DeepSeek Harness）
+
+本仓内置桌面 Agent 入口：`node scripts/workloom-agent.mjs list`（能力清单）与
+`node scripts/workloom-agent-mcp.mjs`（stdio MCP）。接入步骤、本仓可用能力与安全边界见
+[`docs/AGENT-CLIENTS.md`](docs/AGENT-CLIENTS.md)。

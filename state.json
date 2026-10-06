@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repo": "workloom-ai/workloom",
-  "revision": 37,
+  "revision": 39,
   "tasks": {
     "85": {
       "number": 85,
@@ -3672,6 +3672,28 @@
       },
       "previous": "8a21e1be26ebb0eded3b194e5f6a20939139e98fe1df30fbfb3158df2f02da97",
       "digest": "e976abc8a26998d007f88c470871b6657583568594e2dbefe13a5bd19d6798b7"
+    },
+    {
+      "sequence": 38,
+      "at": "2026-10-06T18:05:51.191Z",
+      "kind": "installer_replacement_closed",
+      "data": {
+        "number": 85,
+        "replacement": 86,
+        "sha": "92604c978dbea85a41a0bb4dfc7133bbb6ffbc32"
+      },
+      "previous": "e976abc8a26998d007f88c470871b6657583568594e2dbefe13a5bd19d6798b7",
+      "digest": "c721bcd2fbf69afdd0b847169731fd9c70c60bdbca0f9eb2eafbb9ea7ae33f4e"
+    },
+    {
+      "sequence": 39,
+      "at": "2026-10-06T18:05:50.495Z",
+      "kind": "transaction",
+      "data": {
+        "id": "installer-replacement-closed:85:86"
+      },
+      "previous": "c721bcd2fbf69afdd0b847169731fd9c70c60bdbca0f9eb2eafbb9ea7ae33f4e",
+      "digest": "51a49e6b3b6875080b051db13e39a7661bbcaabd1f15edbcb7b7b9555842b3d7"
     }
   ]
 }

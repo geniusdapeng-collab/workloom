@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repo": "workloom-ai/workloom",
-  "revision": 68,
+  "revision": 71,
   "tasks": {
     "85": {
       "number": 85,
@@ -1373,7 +1373,7 @@
     },
     "88": {
       "number": 88,
-      "status": "waiting_ci",
+      "status": "merging",
       "firstSeen": 1791312598190,
       "attempts": {},
       "admission": {
@@ -1551,6 +1551,114 @@
         "mainSha": "92604c978dbea85a41a0bb4dfc7133bbb6ffbc32",
         "marker": "delivery-origin:88:eb3855862b9b983ad94cb122702777d1c959a911:92604c978dbea85a41a0bb4dfc7133bbb6ffbc32",
         "at": 1791313272978
+      },
+      "mergePhase": "prepared",
+      "mergeSnapshot": {
+        "repo": "workloom-ai/workloom",
+        "number": 89,
+        "pull": {
+          "number": 89,
+          "state": "open",
+          "title": "chore(ci): deliver #88 feat(base): 安装普通研发自动交付 [T-2026-1006-6451]",
+          "body": "Immutable delivery candidate for #88. Exact source eb3855862b9b983ad94cb122702777d1c959a911; tested main 92604c978dbea85a41a0bb4dfc7133bbb6ffbc32.\n\n<!-- delivery-origin:88:eb3855862b9b983ad94cb122702777d1c959a911:92604c978dbea85a41a0bb4dfc7133bbb6ffbc32 -->\n\n<!-- workloom-delivery\n{\"ready\":true,\"depends_on\":[],\"releases\":[]}\n-->",
+          "author": {
+            "username": "OCI",
+            "nickname": "Cloud Native Build",
+            "is_npc": true
+          },
+          "reviewers": [],
+          "labels": [],
+          "base": {
+            "ref": "refs/heads/main",
+            "sha": "92604c978dbea85a41a0bb4dfc7133bbb6ffbc32",
+            "repo": {
+              "id": "2100398108244271104",
+              "name": "workloom",
+              "path": "workloom-ai/workloom",
+              "web_url": "https://cnb.cool/workloom-ai/workloom"
+            }
+          },
+          "head": {
+            "ref": "refs/heads/delivery/candidate/pr-88-5b00e7be6964dada222211c19fc8754e",
+            "sha": "eb3855862b9b983ad94cb122702777d1c959a911",
+            "repo": {
+              "id": "2100398108244271104",
+              "name": "workloom",
+              "path": "workloom-ai/workloom",
+              "web_url": "https://cnb.cool/workloom-ai/workloom"
+            }
+          },
+          "blocked_on": "unblocked",
+          "merged_by": {
+            "is_npc": false
+          },
+          "mergeable_state": "mergeable",
+          "is_wip": false,
+          "is_merged": false,
+          "is_force_merged": false,
+          "statuses": {}
+        },
+        "headSha": "eb3855862b9b983ad94cb122702777d1c959a911",
+        "mainSha": "92604c978dbea85a41a0bb4dfc7133bbb6ffbc32",
+        "files": [
+          ".workloom-delivery-install.json",
+          "scripts/delivery/git-state.mjs",
+          "scripts/delivery/queue.test.mjs"
+        ],
+        "intent": {
+          "taskId": "T-2026-1006-6451",
+          "ready": true,
+          "dependsOn": [],
+          "releases": []
+        },
+        "headTime": 1791312588000,
+        "mergeBase": "92604c978dbea85a41a0bb4dfc7133bbb6ffbc32",
+        "checkErrors": [],
+        "checkSha": "acf9dc3d800c49685b6b52866408da7e0e53800c",
+        "hasFailedChecks": false,
+        "ciPolicyChanges": [
+          {
+            "id": "CI-001",
+            "file": "scripts/delivery/queue.test.mjs",
+            "before": {
+              "ref": "92604c978dbea85a41a0bb4dfc7133bbb6ffbc32",
+              "path": "scripts/delivery/queue.test.mjs",
+              "absent": false
+            },
+            "after": {
+              "ref": "eb3855862b9b983ad94cb122702777d1c959a911",
+              "path": "scripts/delivery/queue.test.mjs",
+              "absent": false
+            },
+            "digest": "23e862159eb630f375f8b7d3835268321f526c5aa40e609668e6427bf39e2c9a"
+          },
+          {
+            "id": "CI-002",
+            "file": "scripts/delivery/git-state.mjs",
+            "before": {
+              "ref": "92604c978dbea85a41a0bb4dfc7133bbb6ffbc32",
+              "path": "scripts/delivery/git-state.mjs",
+              "absent": false
+            },
+            "after": {
+              "ref": "eb3855862b9b983ad94cb122702777d1c959a911",
+              "path": "scripts/delivery/git-state.mjs",
+              "absent": false
+            },
+            "digest": "48d593a2500a9f31a74b002f5fa81707d24120284f31407efa679b60b5c65132"
+          }
+        ],
+        "originNumber": 88,
+        "pendingDependencies": []
+      },
+      "integrationLease": {
+        "owner": "integration/pr-88",
+        "scopes": [
+          "protocol"
+        ],
+        "generation": {
+          "protocol": 8
+        }
       }
     },
     "89": {
@@ -1576,10 +1684,10 @@
   },
   "leases": {
     "protocol": {
-      "owner": null,
-      "generation": 7,
-      "acquiredAt": 1791314805378,
-      "expiresAt": 1791314805378
+      "owner": "integration/pr-88",
+      "generation": 8,
+      "acquiredAt": 1791315931168,
+      "expiresAt": 1791316831168
     }
   },
   "releases": {},
@@ -4522,6 +4630,153 @@
       },
       "previous": "ef493bb3149408362c10a2ee8404b5b8c3f493d8272774408ea319c8644433ee",
       "digest": "b43984a5eef6b28d7c90804592b56298c4d23489fc861683b13d62bf242d15eb"
+    },
+    {
+      "sequence": 69,
+      "at": "2026-10-06T19:45:31.168Z",
+      "kind": "lease_acquire",
+      "data": {
+        "scopes": [
+          "protocol"
+        ],
+        "owner": "integration/pr-88",
+        "generation": {
+          "protocol": 8
+        }
+      },
+      "previous": "b43984a5eef6b28d7c90804592b56298c4d23489fc861683b13d62bf242d15eb",
+      "digest": "c4827d2bc07406e534d5d75987b5caa003df4d094e0a36b463150fbfddf24896"
+    },
+    {
+      "sequence": 70,
+      "at": "2026-10-06T19:45:31.168Z",
+      "kind": "task",
+      "data": {
+        "number": 88,
+        "patch": {
+          "status": "merging",
+          "mergePhase": "prepared",
+          "mergeSnapshot": {
+            "repo": "workloom-ai/workloom",
+            "number": 89,
+            "pull": {
+              "number": 89,
+              "state": "open",
+              "title": "chore(ci): deliver #88 feat(base): 安装普通研发自动交付 [T-2026-1006-6451]",
+              "body": "Immutable delivery candidate for #88. Exact source eb3855862b9b983ad94cb122702777d1c959a911; tested main 92604c978dbea85a41a0bb4dfc7133bbb6ffbc32.\n\n<!-- delivery-origin:88:eb3855862b9b983ad94cb122702777d1c959a911:92604c978dbea85a41a0bb4dfc7133bbb6ffbc32 -->\n\n<!-- workloom-delivery\n{\"ready\":true,\"depends_on\":[],\"releases\":[]}\n-->",
+              "author": {
+                "username": "OCI",
+                "nickname": "Cloud Native Build",
+                "is_npc": true
+              },
+              "reviewers": [],
+              "labels": [],
+              "base": {
+                "ref": "refs/heads/main",
+                "sha": "92604c978dbea85a41a0bb4dfc7133bbb6ffbc32",
+                "repo": {
+                  "id": "2100398108244271104",
+                  "name": "workloom",
+                  "path": "workloom-ai/workloom",
+                  "web_url": "https://cnb.cool/workloom-ai/workloom"
+                }
+              },
+              "head": {
+                "ref": "refs/heads/delivery/candidate/pr-88-5b00e7be6964dada222211c19fc8754e",
+                "sha": "eb3855862b9b983ad94cb122702777d1c959a911",
+                "repo": {
+                  "id": "2100398108244271104",
+                  "name": "workloom",
+                  "path": "workloom-ai/workloom",
+                  "web_url": "https://cnb.cool/workloom-ai/workloom"
+                }
+              },
+              "blocked_on": "unblocked",
+              "merged_by": {
+                "is_npc": false
+              },
+              "mergeable_state": "mergeable",
+              "is_wip": false,
+              "is_merged": false,
+              "is_force_merged": false,
+              "statuses": {}
+            },
+            "headSha": "eb3855862b9b983ad94cb122702777d1c959a911",
+            "mainSha": "92604c978dbea85a41a0bb4dfc7133bbb6ffbc32",
+            "files": [
+              ".workloom-delivery-install.json",
+              "scripts/delivery/git-state.mjs",
+              "scripts/delivery/queue.test.mjs"
+            ],
+            "intent": {
+              "taskId": "T-2026-1006-6451",
+              "ready": true,
+              "dependsOn": [],
+              "releases": []
+            },
+            "headTime": 1791312588000,
+            "mergeBase": "92604c978dbea85a41a0bb4dfc7133bbb6ffbc32",
+            "checkErrors": [],
+            "checkSha": "acf9dc3d800c49685b6b52866408da7e0e53800c",
+            "hasFailedChecks": false,
+            "ciPolicyChanges": [
+              {
+                "id": "CI-001",
+                "file": "scripts/delivery/queue.test.mjs",
+                "before": {
+                  "ref": "92604c978dbea85a41a0bb4dfc7133bbb6ffbc32",
+                  "path": "scripts/delivery/queue.test.mjs",
+                  "absent": false
+                },
+                "after": {
+                  "ref": "eb3855862b9b983ad94cb122702777d1c959a911",
+                  "path": "scripts/delivery/queue.test.mjs",
+                  "absent": false
+                },
+                "digest": "23e862159eb630f375f8b7d3835268321f526c5aa40e609668e6427bf39e2c9a"
+              },
+              {
+                "id": "CI-002",
+                "file": "scripts/delivery/git-state.mjs",
+                "before": {
+                  "ref": "92604c978dbea85a41a0bb4dfc7133bbb6ffbc32",
+                  "path": "scripts/delivery/git-state.mjs",
+                  "absent": false
+                },
+                "after": {
+                  "ref": "eb3855862b9b983ad94cb122702777d1c959a911",
+                  "path": "scripts/delivery/git-state.mjs",
+                  "absent": false
+                },
+                "digest": "48d593a2500a9f31a74b002f5fa81707d24120284f31407efa679b60b5c65132"
+              }
+            ],
+            "originNumber": 88,
+            "pendingDependencies": []
+          },
+          "integrationLease": {
+            "owner": "integration/pr-88",
+            "scopes": [
+              "protocol"
+            ],
+            "generation": {
+              "protocol": 8
+            }
+          }
+        }
+      },
+      "previous": "c4827d2bc07406e534d5d75987b5caa003df4d094e0a36b463150fbfddf24896",
+      "digest": "fa05a477513e1724a23e45c35207f7df9acabb0787feaa1ecf0c4b7662dca4ce"
+    },
+    {
+      "sequence": 71,
+      "at": "2026-10-06T19:45:34.975Z",
+      "kind": "transaction",
+      "data": {
+        "id": "5d7eec9e-162c-4717-9e18-743db493043f"
+      },
+      "previous": "fa05a477513e1724a23e45c35207f7df9acabb0787feaa1ecf0c4b7662dca4ce",
+      "digest": "8ef65c4624862ba94c99e2965356220714aab3af67b46e38fecf3cb1b4fbe253"
     }
   ]
 }

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "workloom.repository/v1",
+  "logicalId": "workloom",
+  "productId": "workloom-ai-acquisition",
+  "lane": "industry",
+  "primaryPlatform": "github",
+  "github": {
+    "repository": "geniusdapeng-collab/workloom",
+    "url": "https://github.com/geniusdapeng-collab/workloom",
+    "branch": "main"
+  },
+  "cnb": {
+    "repository": "workloom-ai/workloom",
+    "url": "https://cnb.cool/workloom-ai/workloom",
+    "branch": "main"
+  },
+  "mirrorPolicy": {
+    "platform": "cnb",
+    "mode": "deferred",
+    "automaticProductSync": false,
+    "configBackupBranchPrefix": "workloom/config-backup/"
+  },
+  "baseSync": {
+    "receive": "subscribed",
+    "reflux": "proposal-only",
+    "pathPrefix": "",
+    "extraExclude": [],
+    "uiRolloutWave": "W3B",
+    "industryExtensionPaths": [
+      "apps/*/src/App.tsx",
+      "apps/*/src/audio/**",
+      "apps/*/src/components/AgentAvatar.tsx",
+      "apps/*/src/components/Floor3D.tsx",
+      "apps/*/src/components/MateWelcome.tsx",
+      "apps/*/src/components/SimBanner.tsx",
+      "apps/*/src/components/SkillDistBanner.tsx",
+      "apps/*/src/components/Stage3D.tsx",
+      "apps/*/src/components/ValueCounters.tsx",
+      "apps/*/src/components/WelcomeCeremony.tsx",
+      "apps/*/src/components/hud/**",
+      "apps/*/src/components/loomball/**",
+      "apps/*/src/components/loommate/**",
+      "apps/*/src/components/mate-guide/**",
+      "apps/*/src/components/star-ring/**",
+      "apps/*/src/components/welcomeScripts.ts",
+      "apps/*/src/lib/**",
+      "apps/*/src/onboarding/**",
+      "apps/*/src/pages/**",
+      "apps/*/src/shell/**",
+      "apps/*/src/vendor/**",
+      "apps/*/src/voice/**",
+      "apps/*/vitest.config.ts",
+      "apps/*/vite.config.ts"
+    ],
+    "tolerateExtensionSnapshotOverlap": true,
+    "adoptBaseClientPaths": [
+      "apps/*/package.json",
+      "apps/webb/src/Auth.tsx"
+    ],
+    "rolloutResumeNote": "2026-09-30 解除挂起（恢复 W3B）：前置条件①「仓级扩展路径全链路」已落地（T-2026-0930-0003，本会话 follow-up 补齐 adoptBaseClientPaths）。本仓 24 条产品分叉路径由本仓自持（rollout 退管并记入 state.retiredManagedForks）；三端 apps/*/package.json 与文案代差的 apps/webb/src/Auth.tsx 显式声明为「采纳基座版」，保证 @workloom/ui 版本与 lock 完整性仍走基座通道。实测升级计划 ready=true：退管 71 条、更新 5 文件（三端 package.json、webb/Auth.tsx、web/main.tsx）+ 新建 styles/subtitle.css。"
+  },
+  "registry": {
+    "repository": "geniusdapeng-collab/workloom-im",
+    "path": "sync/repository-registry.json"
+  }
+}

@@ -35,7 +35,16 @@ export interface ValidatedStageFacts {
   stage: IntelStage; status: "source_bound" | "no_evidence"; payload: Record<string, unknown>;
   claims: ClaimEvidence[]; noEvidenceReason?: string;
 }
+export interface MarketingPolicyExclusion {
+  pointer: string;
+  value: string;
+  reason: "product-query-brand-conflict";
+}
+export interface MarketingPolicyOptions {
+  productQuery?: Record<string, unknown>;
+}
 const escapePointer = (value: string) => value.replace(/~/g, "~0").replace(/\//g, "~1");
+const identityToken = (value: string) => value.normalize("NFKC").trim().toLocaleLowerCase("zh-CN").replace(/\s+/gu, " ");
 const sourceFields = new Set(["url", "source_url", "page_url", "price_source_url", "visual_source_url", "source", "channel", "suspect"]);
 function factLeaves(value: unknown, pointer = "", out = new Map<string, string | number | boolean>()): Map<string, string | number | boolean> {
   if (Array.isArray(value)) value.forEach((entry, i) => factLeaves(entry, `${pointer}/${i}`, out));
@@ -48,6 +57,49 @@ function factLeaves(value: unknown, pointer = "", out = new Map<string, string |
 export function stagePayloadShape(stage: IntelStage, raw: unknown): Record<string, unknown> {
   try { return (stage === "A1" ? a1 : stage === "A2" ? a2 : a3).parse(raw) as Record<string, unknown>; }
   catch (error) { throw new Error(`MARKETING_PAYLOAD_INVALID：${stage} ${error instanceof Error ? error.message : String(error)}`); }
+}
+
+/**
+ * Brand is optional while product name is required. A source may mention a
+ * parent foundation, publisher, or project sponsor near the product name;
+ * that relation is not enough to relabel the product brand. When the caller
+ * supplied an explicit brand query, isolate a conflicting optional value
+ * instead of asking semantic review to repair or approve it.
+ */
+export function filterUnsafeMarketingExtraction(
+  stage: IntelStage,
+  raw: unknown,
+  options: MarketingPolicyOptions = {},
+): { value: unknown; exclusions: MarketingPolicyExclusion[] } {
+  if (stage !== "A1" || !raw || typeof raw !== "object" || Array.isArray(raw)) return { value: raw, exclusions: [] };
+  const source = structuredClone(raw) as Record<string, unknown>;
+  const payload = source.payload && typeof source.payload === "object" && !Array.isArray(source.payload)
+    ? source.payload as Record<string, unknown>
+    : null;
+  const identity = payload?.identity && typeof payload.identity === "object" && !Array.isArray(payload.identity)
+    ? payload.identity as Record<string, unknown>
+    : null;
+  const queriedBrand = typeof options.productQuery?.brand === "string" ? options.productQuery.brand : "";
+  const extractedBrand = typeof identity?.brand === "string" ? identity.brand : "";
+  if (!identity || !queriedBrand.trim() || !extractedBrand.trim()
+    || identityToken(queriedBrand) === identityToken(extractedBrand)) {
+    return { value: raw, exclusions: [] };
+  }
+
+  delete identity.brand;
+  if (Array.isArray(source.citations)) {
+    source.citations = source.citations.filter((citation) =>
+      !(citation && typeof citation === "object" && !Array.isArray(citation)
+        && (citation as Record<string, unknown>).pointer === "/identity/brand"));
+  }
+  return {
+    value: source,
+    exclusions: [{
+      pointer: "/identity/brand",
+      value: extractedBrand,
+      reason: "product-query-brand-conflict",
+    }],
+  };
 }
 
 export function validateStageFacts(stage: IntelStage, raw: unknown, sources: SourceSnapshot[]): ValidatedStageFacts {

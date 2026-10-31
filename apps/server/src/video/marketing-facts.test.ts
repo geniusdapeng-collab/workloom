@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateStageFacts, revalidateStageFacts } from "./marketing-facts.js";
+import { filterUnsafeMarketingExtraction, validateStageFacts, revalidateStageFacts } from "./marketing-facts.js";
 import { renderSha256 } from "./gen/compiled-request.js";
 import type { SourceSnapshot } from "./marketing-source-fetcher.js";
 const body = "星野 F3 风量 9 档。价格 399 CNY。评价：低档安静。评分 4。另一款北斗支持 5 档。";
@@ -48,6 +48,37 @@ describe("逐事实叶子的正文绑定", () => {
     const value: any = fixture(); value.payload.images = [{ url: source.assetUrls[0], page_url: source.finalUrl, angle: "unknown" }];
     expect(validateStageFacts("A1", value, [source]).claims).toHaveLength(3);
     value.payload.images[0].url = "https://other.example.com/fake.png"; expect(() => validateStageFacts("A1", value, [source])).toThrow("MARKETING_URL_UNVERIFIED");
+  });
+  it("显式商品查询与可选品牌冲突时移除品牌和其 citation", () => {
+    const filtered = filterUnsafeMarketingExtraction("A1", {
+      payload: {
+        identity: {
+          name: "Home Assistant",
+          brand: "Open Home Foundation",
+          specs: { License: "Apache-2.0" },
+          official_selling_points: [{ point: "Open source home automation", source_url: source.finalUrl }],
+        },
+        images: [],
+      },
+      citations: [
+        citation("/identity/name"),
+        citation("/identity/brand"),
+        citation("/identity/specs/License"),
+        citation("/identity/official_selling_points/0/point"),
+      ],
+    }, { productQuery: { name: "Home Assistant", brand: "Home Assistant" } });
+    const value = filtered.value as any;
+    expect(value.payload.identity).not.toHaveProperty("brand");
+    expect(value.citations.map((item: any) => item.pointer)).toEqual([
+      "/identity/name",
+      "/identity/specs/License",
+      "/identity/official_selling_points/0/point",
+    ]);
+    expect(filtered.exclusions).toEqual([{
+      pointer: "/identity/brand",
+      value: "Open Home Foundation",
+      reason: "product-query-brand-conflict",
+    }]);
   });
   it.each(["value", "offset", "hash", "status"])("已保存%s变化复读必须拒绝", kind => {
     const facts: any = validateStageFacts("A1", fixture(), [source]);

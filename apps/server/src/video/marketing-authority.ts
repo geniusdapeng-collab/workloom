@@ -7,7 +7,7 @@ import { mkdir, open, realpath, writeFile } from "node:fs/promises";
 import { reviewStage, type ProducerVerdict } from "@hyperreality/video-studio";
 import { createDataMiningExecutor, type DataMiningStagePlan, type ExecutorLlm, type IntelStage, type SearchFn, type SearchHit } from "./data-mining-executor.js";
 import { fetchMarketingSource, type SourceSnapshot } from "./marketing-source-fetcher.js";
-import { validateStageFacts, revalidateStageFacts, type ValidatedStageFacts } from "./marketing-facts.js";
+import { filterUnsafeMarketingExtraction, validateStageFacts, revalidateStageFacts, type ValidatedStageFacts } from "./marketing-facts.js";
 import { canonicalRenderJson, renderSha256 } from "./gen/compiled-request.js";
 import { SubmissionError } from "./gen/submission-ledger.js";
 
@@ -154,7 +154,8 @@ export async function prepareMarketingFacts(input: {
       let parsed: unknown;
       try { parsed = result.data ?? JSON.parse(result.content ?? ""); }
       catch { fail("MARKETING_EXTRACTION_UNVERIFIED", "事实提取不是可核实JSON"); }
-      const facts = validateStageFacts(stage, parsed, pages);
+      const filtered = filterUnsafeMarketingExtraction(stage, parsed, { productQuery: product });
+      const facts = validateStageFacts(stage, filtered.value, pages);
       const evidence = await writeBound(root, `${prefix}-${stage}.review.json`, canonicalRenderJson({ scope, productQuery: product, facts, sources: pages }));
       const verdict = await review({ stage: "script", projectId: scope.projectId, env,
         artifacts: [{ path: evidence.path, kind: "json", note: "完整原文、逐主张值、原文引用位置；非搜索摘要" }],

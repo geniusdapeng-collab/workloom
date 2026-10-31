@@ -189,6 +189,34 @@ describe("VideoStudio 确认作用域与装配清理", () => {
     expect(await studio(async () => ({ approved: true })).runPreproduction({ projectId: "p", intent: "intent" })).toBe(result);
     expect(studioMocks.disposed).toEqual([...studioMocks.installed].reverse());
   });
+
+  it("deferRender 只运行预生产，不进入依赖成片字节的后期", async () => {
+    studioMocks.create.mockImplementation(async () => ({ success: true, stages: {} }));
+    await studio(async () => ({ approved: true })).runPreproduction({
+      projectId: "p-normal",
+      intent: "normal-intent",
+    });
+    expect(studioMocks.create.mock.calls[0]![2]).not.toHaveProperty("skipPostProduction");
+
+    const deferredStudio = new VideoStudio({
+      llm: new WorkloomLLMEngine({
+        baseUrl: "https://example.invalid",
+        apiKey: "test-only",
+        model: "test",
+      }),
+      workDir: "/unused/preproduction-only-test",
+      onApproval: async () => ({ approved: true }),
+      deferRender: true,
+      log: () => undefined,
+    });
+    await deferredStudio.runPreproduction({ projectId: "p-deferred", intent: "deferred-intent" });
+
+    expect(studioMocks.create).toHaveBeenCalledWith(
+      "deferred-intent",
+      expect.anything(),
+      expect.objectContaining({ skipRender: true, skipPostProduction: true }),
+    );
+  });
 });
 
 describe("LLM 适配器", () => {

@@ -1,3 +1,27 @@
+# WorkLoom · 酒店获客增长系统
+
+**把内容制作、获客和线索交接放进同一个工作空间。**
+
+酒店经营者和内容团队可以围绕同一个客源目标分配任务、制作视频和文案，再跟进内容触达、线索承接和复盘。工作台呈现岗位、任务进展及交接记录，让团队能从一条内容追到对应的作业。
+
+## 从一个获客目标开始
+
+例如为周末住宿套餐新增线索，先梳理目标客群和常问问题，再用同组选题制作短视频和面向生成式搜索的 GEO 内容。内容制作有专用视频工位。渠道采集、能见度监测、分发、真实订单和归因由实际接入的数据与回执支持。 [获客方案](docs/plan-acquisition.md) · [社媒与 GEO 作业设计](docs/geo-fusion-plan.md)
+
+| 工作环节 | 仓内入口 |
+| --- | --- |
+| 定选题与触达方式 | [情报融合](bundles/geo-growth/pipelines/intel-fusion.yml)、[双域内容流程](bundles/geo-growth/pipelines/dual-content-factory.yml) |
+| 做视频和记录交付 | [AI 视频行业包](bundles/ai-video/bundle.json) |
+| 理顺酒店线索承接 | [酒店获客流程](bundles/hotel/pipelines/hotel-acquisition-loop.yml) |
+| 体验工作区或接入 Agent | [能力导览](docs/capabilities.auto.md)、[客户端接入](docs/AGENT-CLIENTS.md) |
+
+默认工作区会组合 GEO 增长、AI 视频和酒店行业能力。这个仓库有独立的产品身份和运行配置。 [产品清单](product.manifest.json) · [开发指引](AGENTS.md)
+
+## 原版说明与 Agent 指引
+
+<details>
+<summary>展开原版 README、运行和开发说明</summary>
+
 # WorkLoom 获客增长系统
 
 WorkLoom 获客增长系统面向企业增长与内容运营团队，把目标、数字员工岗位、内容生产、任务协作和过程记录放进同一个工作空间。产品目标是连接意图洞察、社媒与 GEO 触达、线索承接、转化和复盘；当前代码中，**视频生产与交付有专用执行链，通用工作台和行业包提供组织与治理机制，部分增长工具仍处于声明或接入阶段**。
@@ -275,3 +299,5 @@ git diff --check
 本仓内置桌面 Agent 入口：`node scripts/workloom-agent.mjs list`（能力清单）与
 `node scripts/workloom-agent-mcp.mjs`（stdio MCP）。接入步骤、本仓可用能力与安全边界见
 [`docs/AGENT-CLIENTS.md`](docs/AGENT-CLIENTS.md)。
+
+</details>

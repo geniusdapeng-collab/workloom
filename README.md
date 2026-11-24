@@ -142,7 +142,7 @@ NATS/Redis 的事件总线库可在源码中找到，但当前主业务入口未
 ### 1. 克隆、依赖与专用数据库
 
 ```bash
-git clone https://cnb.cool/workloom-ai/workloom.git
+git clone https://github.com/geniusdapeng-collab/workloom.git
 cd workloom
 pnpm install --frozen-lockfile
 test -f .env || cp .env.example .env

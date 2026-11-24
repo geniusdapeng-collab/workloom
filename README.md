@@ -1,8 +1,10 @@
 # WorkLoom 获客增长系统
 
-WorkLoom 获客增长系统面向企业增长与内容运营团队，把目标、数字员工岗位、内容生产、任务协作和过程记录放进同一个工作空间。产品目标是连接意图洞察、社媒与 GEO 触达、线索承接、转化和复盘；当前代码中，**视频生产与交付有专用执行链，通用工作台和行业包提供组织与治理机制，部分增长工具仍处于声明或接入阶段**。
+给企业内容和增长团队使用的获客工作区。团队可以从一份产品资料启动短视频制作，得到可复查的成片和交付记录，再围绕同一选题组织社媒内容、面向生成式搜索的 GEO 内容，以及后续的线索承接和复盘。
 
-[CNB 仓库](https://cnb.cool/workloom-ai/workloom) · [产品身份](product.manifest.json) · [代码入口导览](docs/capabilities.auto.md) · [开发指引](AGENTS.md) · [Apache-2.0](LICENSE)
+工作台记录任务由谁接手、进展如何、何时需要协调。视频 Studio 已提供脚本、渲染、后期与媒资交付入口。渠道发布、GEO 监测和真实线索归因的可用范围取决于各自的连接器、授权和业务数据。
+
+[GitHub 源码](https://github.com/geniusdapeng-collab/workloom) · [产品身份](product.manifest.json) · [代码入口导览](docs/capabilities.auto.md) · [开发指引](AGENTS.md) · [Apache-2.0](LICENSE)
 
 > 本页按当前源码说明“有什么、从哪里进入、还依赖什么”，不把岗位或技能数量当作已交付能力数，也不把模拟结果当作生产效果。旧方案、截图和演示 PPT 可帮助理解背景；发生差异时，以 manifest、当前路由和实际执行代码为准。
 
@@ -20,9 +22,7 @@ WorkLoom 获客增长系统面向企业增长与内容运营团队，把目标�
 | 企业负责人、项目负责人 | 看清任务交给谁、交付什么、哪里待决定 | 工作台、任务线程、协作契约与组合看板组织交接和状态 | 看板和事件存在不等于营收归因已接通；演示订单不能当实际收入 |
 | 增长策略与渠道运营人员 | 同一选题用于社媒内容与 GEO，并积累可复用作业规范 | `geo-growth` 声明岗位、技能、围栏和管线，复用视频与视觉制作能力 | query 采集、能见度监测、线索评分和分发等专用工具仍需逐项接线与验收 |
 
-本仓身份是 `workloom-ai-acquisition`，角色为 `industry`，默认行业包为 `geo-growth`。它与实验车道 `WorkLoom-growth` 以及 `workloom-growthtest`、`workloom-growthmatrix` 两个隔离副本是不同实例；不把其它仓库的实验能力合并算入本仓。酒店包是组合依赖和垂直业务样例，不代表这里已经接通真实 PMS、OTA、支付或所有酒店经营数据。来源：[product.manifest.json](product.manifest.json)、[主包 manifest](bundles/geo-growth/bundle.json)。
-
-> 代码基线：本仓当前代码由实验车道 `WorkLoom-growth@2edea37` 全量复刻而来（2026-09-29，任务卡 `[T-2026-0929-0006]`），复刻时只改产品身份与配套名称（`productId`、`appId`、仓库标识、桌面端口偏移、README 与随仓文档），行为代码未做二次加工。两仓后续若继续并行演进，合入本仓前请按上面的功能状态表逐条核对真实回执。
+产品标识为 `workloom-ai-acquisition`，默认行业包为 `geo-growth`。酒店行业包提供可组合的行业能力和业务样例。真实 PMS、OTA、支付和经营数据需按运行实例接入。 [产品清单](product.manifest.json) · [GEO 行业包](bundles/geo-growth/bundle.json)
 
 ## 功能状态：代码做到哪里
 
